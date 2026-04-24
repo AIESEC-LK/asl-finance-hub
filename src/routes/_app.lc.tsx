@@ -1,0 +1,213 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Filters, defaultFilters, type FilterState } from "@/components/Filters";
+import { KpiCard } from "@/components/KpiCard";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { fetchMetrics, fmtCurrency, FUNCTION_CODES, type FunctionCode, type MonthlyMetric } from "@/lib/finance";
+import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
+import { format, parseISO } from "date-fns";
+import { Banknote, Wallet, ArrowDownCircle, ArrowUpCircle, Landmark, Coins } from "lucide-react";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Legend, PieChart, Pie, Cell } from "recharts";
+
+export const Route = createFileRoute("/_app/lc")({
+  component: LCDashboard,
+});
+
+const FN_COLORS = ["var(--aiesec-blue)", "var(--aiesec-teal)", "var(--aiesec-orange)", "var(--aiesec-red)", "var(--aiesec-purple)", "var(--aiesec-green)", "var(--aiesec-yellow)"];
+
+interface FnRow { entity_id: string; period_month: string; function_code: FunctionCode; amount: number }
+
+function LCDashboard() {
+  const { profile, isLC, isMC, isEFB } = useAuth();
+  const [filters, setFilters] = useState<FilterState>(defaultFilters());
+  const [metrics, setMetrics] = useState<MonthlyMetric[]>([]);
+  const [revenue, setRevenue] = useState<FnRow[]>([]);
+  const [costs, setCosts] = useState<FnRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const lockEntity = isLC && !isMC && !isEFB;
+    const entityId = lockEntity ? profile?.entity_id : filters.entityId !== "all" ? filters.entityId : null;
+
+    setLoading(true);
+    (async () => {
+      const ids = entityId ? [entityId] : undefined;
+      const [m, rev, c] = await Promise.all([
+        fetchMetrics(ids, filters.from, filters.to),
+        loadFn("revenue_streams", ids, filters),
+        loadFn("cost_breakdown", ids, filters),
+      ]);
+      const f = (rows: MonthlyMetric[]) => filters.term === "all" ? rows : rows.filter((r) => r.term === filters.term);
+      setMetrics(f(m));
+      setRevenue(rev);
+      setCosts(c);
+      setLoading(false);
+    })();
+  }, [filters, profile?.entity_id, isLC, isMC, isEFB]);
+
+  const latest = metrics[metrics.length - 1];
+
+  const cashTrend = useMemo(() => metrics.map((m) => ({
+    label: format(parseISO(m.period_month), "MMM yy"),
+    bank: m.bank_balance ?? 0,
+    inflow: m.inflow ?? 0,
+    outflow: m.outflow ?? 0,
+    net: (m.inflow ?? 0) - (m.outflow ?? 0),
+  })), [metrics]);
+
+  const revByFn = useMemo(() => aggregateByFn(revenue, filters.functionCode), [revenue, filters.functionCode]);
+  const costByFn = useMemo(() => aggregateByFn(costs, filters.functionCode), [costs, filters.functionCode]);
+
+  const gpmByFn = useMemo(() => FUNCTION_CODES.map((fn) => {
+    const r = revenue.filter((x) => x.function_code === fn).reduce((s, x) => s + Number(x.amount), 0);
+    const c = costs.filter((x) => x.function_code === fn).reduce((s, x) => s + Number(x.amount), 0);
+    return { fn, gpm: r > 0 ? ((r - c) / r) * 100 : 0 };
+  }), [revenue, costs]);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-semibold">LC Dashboard</h2>
+        <p className="text-sm text-muted-foreground">Local Committee detailed financial view.</p>
+      </div>
+      <Filters value={filters} onChange={setFilters} />
+
+      {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
+
+      {!loading && latest && (
+        <>
+          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+            <KpiCard label="Bank Balance" value={fmtCurrency(latest.bank_balance)} icon={<Wallet className="h-4 w-4" />} accent="primary" />
+            <KpiCard label="Assets" value={fmtCurrency(latest.assets)} icon={<Landmark className="h-4 w-4" />} accent="teal" />
+            <KpiCard label="Liabilities" value={fmtCurrency(latest.liabilities)} icon={<ArrowDownCircle className="h-4 w-4" />} accent="red" />
+            <KpiCard label="Receivables" value={fmtCurrency(latest.receivables)} icon={<ArrowUpCircle className="h-4 w-4" />} accent="orange" />
+            <KpiCard label="Liquidity" value={fmtCurrency(latest.liquidity)} icon={<Coins className="h-4 w-4" />} accent="green" />
+            <KpiCard label="Equity" value={fmtCurrency(latest.equity)} icon={<Banknote className="h-4 w-4" />} accent="purple" />
+          </div>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Bank balance trend</CardTitle></CardHeader>
+            <CardContent className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={cashTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="bank" stroke="var(--aiesec-blue)" strokeWidth={2.5} dot={false} name="Bank balance" />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Inflow vs Outflow</CardTitle></CardHeader>
+              <CardContent className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={cashTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="inflow" fill="var(--aiesec-green)" name="Inflow" />
+                    <Bar dataKey="outflow" fill="var(--aiesec-red)" name="Outflow" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="text-base">Net cash movement</CardTitle></CardHeader>
+              <CardContent className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={cashTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="net" name="Net">
+                      {cashTrend.map((d, i) => (
+                        <Cell key={i} fill={d.net >= 0 ? "var(--aiesec-green)" : "var(--aiesec-red)"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Revenue by function</CardTitle></CardHeader>
+              <CardContent className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={revByFn} dataKey="amount" nameKey="fn" innerRadius={50} outerRadius={90}>
+                      {revByFn.map((_, i) => <Cell key={i} fill={FN_COLORS[i % FN_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="text-base">Cost by function</CardTitle></CardHeader>
+              <CardContent className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={costByFn} dataKey="amount" nameKey="fn" innerRadius={50} outerRadius={90}>
+                      {costByFn.map((_, i) => <Cell key={i} fill={FN_COLORS[i % FN_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="text-base">GPM by function (%)</CardTitle></CardHeader>
+              <CardContent className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={gpmByFn}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="fn" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v) => `${Number(v).toFixed(1)}%`} />
+                    <Bar dataKey="gpm" fill="var(--aiesec-teal)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+
+      {!loading && !latest && (
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
+          {isLC && !profile?.entity_id ? "Your account is not assigned to an entity yet. Ask MC admin to assign one." : "No data for the selected filters."}
+        </CardContent></Card>
+      )}
+    </div>
+  );
+}
+
+async function loadFn(table: "revenue_streams" | "cost_breakdown", ids: string[] | undefined, f: FilterState): Promise<FnRow[]> {
+  let q = supabase.from(table).select("entity_id,period_month,function_code,amount");
+  if (ids) q = q.in("entity_id", ids);
+  if (f.from) q = q.gte("period_month", f.from);
+  if (f.to) q = q.lte("period_month", f.to);
+  if (f.functionCode !== "all") q = q.eq("function_code", f.functionCode);
+  const { data } = await q;
+  return (data ?? []) as FnRow[];
+}
+
+function aggregateByFn(rows: FnRow[], fnFilter: FunctionCode | "all") {
+  const map = new Map<string, number>();
+  rows.forEach((r) => map.set(r.function_code, (map.get(r.function_code) ?? 0) + Number(r.amount)));
+  const out = FUNCTION_CODES.filter((c) => fnFilter === "all" || c === fnFilter).map((fn) => ({ fn, amount: map.get(fn) ?? 0 }));
+  return out;
+}
