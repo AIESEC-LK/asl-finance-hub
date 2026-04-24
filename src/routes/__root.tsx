@@ -29,16 +29,20 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "ASL Finance Dashboard" },
+      { name: "description", content: "AIESEC Sri Lanka Finance Dashboard" },
+      { name: "author", content: "AIESEC Sri Lanka" },
+      { property: "og:title", content: "ASL Finance Dashboard" },
+      { property: "og:description", content: "AIESEC Sri Lanka Finance Dashboard" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:site", content: "@AIESECSriLanka" },
     ],
     links: [
+      {
+        rel: "icon",
+        href: "AIESEC-Human-White.png",
+      },
       {
         rel: "stylesheet",
         href: appCss,
