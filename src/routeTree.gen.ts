@@ -9,38 +9,173 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppReviewRouteImport } from './routes/_app.review'
+import { Route as AppPerformanceRouteImport } from './routes/_app.performance'
+import { Route as AppOverviewRouteImport } from './routes/_app.overview'
+import { Route as AppLcRouteImport } from './routes/_app.lc'
+import { Route as AppContactsRouteImport } from './routes/_app.contacts'
+import { Route as AppBudgetRouteImport } from './routes/_app.budget'
+import { Route as AppAuditRouteImport } from './routes/_app.audit'
+import { Route as AppAdminRouteImport } from './routes/_app.admin'
 
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppReviewRoute = AppReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPerformanceRoute = AppPerformanceRouteImport.update({
+  id: '/performance',
+  path: '/performance',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOverviewRoute = AppOverviewRouteImport.update({
+  id: '/overview',
+  path: '/overview',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLcRoute = AppLcRouteImport.update({
+  id: '/lc',
+  path: '/lc',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppContactsRoute = AppContactsRouteImport.update({
+  id: '/contacts',
+  path: '/contacts',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBudgetRoute = AppBudgetRouteImport.update({
+  id: '/budget',
+  path: '/budget',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAuditRoute = AppAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/admin': typeof AppAdminRoute
+  '/audit': typeof AppAuditRoute
+  '/budget': typeof AppBudgetRoute
+  '/contacts': typeof AppContactsRoute
+  '/lc': typeof AppLcRoute
+  '/overview': typeof AppOverviewRoute
+  '/performance': typeof AppPerformanceRoute
+  '/review': typeof AppReviewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/admin': typeof AppAdminRoute
+  '/audit': typeof AppAuditRoute
+  '/budget': typeof AppBudgetRoute
+  '/contacts': typeof AppContactsRoute
+  '/lc': typeof AppLcRoute
+  '/overview': typeof AppOverviewRoute
+  '/performance': typeof AppPerformanceRoute
+  '/review': typeof AppReviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
+  '/_app/admin': typeof AppAdminRoute
+  '/_app/audit': typeof AppAuditRoute
+  '/_app/budget': typeof AppBudgetRoute
+  '/_app/contacts': typeof AppContactsRoute
+  '/_app/lc': typeof AppLcRoute
+  '/_app/overview': typeof AppOverviewRoute
+  '/_app/performance': typeof AppPerformanceRoute
+  '/_app/review': typeof AppReviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/audit'
+    | '/budget'
+    | '/contacts'
+    | '/lc'
+    | '/overview'
+    | '/performance'
+    | '/review'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/audit'
+    | '/budget'
+    | '/contacts'
+    | '/lc'
+    | '/overview'
+    | '/performance'
+    | '/review'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/login'
+    | '/_app/admin'
+    | '/_app/audit'
+    | '/_app/budget'
+    | '/_app/contacts'
+    | '/_app/lc'
+    | '/_app/overview'
+    | '/_app/performance'
+    | '/_app/review'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +183,93 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/review': {
+      id: '/_app/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof AppReviewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/performance': {
+      id: '/_app/performance'
+      path: '/performance'
+      fullPath: '/performance'
+      preLoaderRoute: typeof AppPerformanceRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/overview': {
+      id: '/_app/overview'
+      path: '/overview'
+      fullPath: '/overview'
+      preLoaderRoute: typeof AppOverviewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/lc': {
+      id: '/_app/lc'
+      path: '/lc'
+      fullPath: '/lc'
+      preLoaderRoute: typeof AppLcRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/contacts': {
+      id: '/_app/contacts'
+      path: '/contacts'
+      fullPath: '/contacts'
+      preLoaderRoute: typeof AppContactsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/budget': {
+      id: '/_app/budget'
+      path: '/budget'
+      fullPath: '/budget'
+      preLoaderRoute: typeof AppBudgetRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/audit': {
+      id: '/_app/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AppAuditRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin': {
+      id: '/_app/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppRouteChildren {
+  AppAdminRoute: typeof AppAdminRoute
+  AppAuditRoute: typeof AppAuditRoute
+  AppBudgetRoute: typeof AppBudgetRoute
+  AppContactsRoute: typeof AppContactsRoute
+  AppLcRoute: typeof AppLcRoute
+  AppOverviewRoute: typeof AppOverviewRoute
+  AppPerformanceRoute: typeof AppPerformanceRoute
+  AppReviewRoute: typeof AppReviewRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppAdminRoute: AppAdminRoute,
+  AppAuditRoute: AppAuditRoute,
+  AppBudgetRoute: AppBudgetRoute,
+  AppContactsRoute: AppContactsRoute,
+  AppLcRoute: AppLcRoute,
+  AppOverviewRoute: AppOverviewRoute,
+  AppPerformanceRoute: AppPerformanceRoute,
+  AppReviewRoute: AppReviewRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
