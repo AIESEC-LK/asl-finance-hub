@@ -202,7 +202,7 @@ const GFB_DICTIONARY: Record<string, MappingDefinition> = {
   "8205-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null },
   "8206-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null },
   "8207-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null },
-  "8208-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null },
+  "8208-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // Keeping as "cost" pending confirmation from finance team, despite "Revenue" in description
   "8401-NE-CO-LC": { category: "cost", functionCode: "BD", balanceField: null },
   "8402-NE-CO-LC": { category: "cost", functionCode: "BD", balanceField: null },
 
