@@ -96,7 +96,7 @@ function PerformancePage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="metric" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => fmtCurrency(v)} />
+                <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
                 <Legend />
                 <Bar dataKey="first" fill="var(--aiesec-teal)" name="Period 1" />
                 <Bar dataKey="second" fill="var(--aiesec-blue)" name="Period 2" />
@@ -113,7 +113,7 @@ function PerformancePage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => fmtCurrency(v)} />
+                <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
                 <Bar dataKey="cumRevenue" fill="var(--aiesec-purple)" name="Cumulative revenue" />
               </BarChart>
             </ResponsiveContainer>
@@ -132,7 +132,7 @@ function PerformancePage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="entity" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => fmtCurrency(v)} />
+                <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
                 <Legend />
                 <Bar dataKey="revenue" fill="var(--aiesec-blue)" name="Entity revenue" />
                 <Bar dataKey="nationalAvg" fill="var(--aiesec-orange)" name="National average" />

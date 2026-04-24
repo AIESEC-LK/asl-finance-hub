@@ -148,7 +148,7 @@ function LCDashboard() {
                     <Pie data={revByFn} dataKey="amount" nameKey="fn" innerRadius={50} outerRadius={90}>
                       {revByFn.map((_, i) => <Cell key={i} fill={FN_COLORS[i % FN_COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(v: number) => fmtCurrency(v)} />
+                    <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
@@ -162,7 +162,7 @@ function LCDashboard() {
                     <Pie data={costByFn} dataKey="amount" nameKey="fn" innerRadius={50} outerRadius={90}>
                       {costByFn.map((_, i) => <Cell key={i} fill={FN_COLORS[i % FN_COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(v: number) => fmtCurrency(v)} />
+                    <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
@@ -176,7 +176,7 @@ function LCDashboard() {
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="fn" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
+                    <Tooltip formatter={(v) => `${Number(v).toFixed(1)}%`} />
                     <Bar dataKey="gpm" fill="var(--aiesec-teal)" />
                   </BarChart>
                 </ResponsiveContainer>
