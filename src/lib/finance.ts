@@ -29,18 +29,20 @@ export interface MonthlyMetric {
   ap_ranking: number | null;
 }
 
-export type FunctionCode = "iGV" | "iGT" | "oGV" | "oGT" | "ELD" | "EwA" | "BD";
+export type FunctionCode = "iGV" | "iGT" | "oGV" | "oGT" | "ELD" | "EwA" | "BD" | "NMF" | "Conference";
 
-export const FUNCTION_CODES: FunctionCode[] = ["iGV", "iGT", "oGV", "oGT", "ELD", "EwA", "BD"];
+export const FUNCTION_CODES: FunctionCode[] = ["iGV", "iGT", "oGV", "oGT", "ELD", "EwA", "BD", "NMF", "Conference"];
 
 export const FUNCTION_COLORS: Record<FunctionCode, string> = {
-  iGV: "var(--aiesec-blue)",
-  iGT: "var(--aiesec-teal)",
-  oGV: "var(--aiesec-orange)",
-  oGT: "var(--aiesec-red)",
-  ELD: "var(--aiesec-purple)",
-  EwA: "var(--aiesec-green)",
-  BD: "var(--aiesec-yellow)",
+  "iGV": "var(--aiesec-blue)",
+  "iGT": "var(--aiesec-teal)",
+  "oGV": "var(--aiesec-orange)",
+  "oGT": "var(--aiesec-red)",
+  "ELD": "var(--aiesec-purple)",
+  "EwA": "var(--aiesec-green)",
+  "BD": "var(--aiesec-yellow)",
+  "NMF": "var(--aiesec-yellow)",
+  "Conference": "var(--aiesec-blue)",
 };
 
 export async function fetchEntities(): Promise<Entity[]> {
