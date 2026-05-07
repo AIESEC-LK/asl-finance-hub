@@ -24,7 +24,15 @@ export const LC_CODE_TO_NAME: Record<string, string> = {
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type RowCategory = "revenue" | "cost" | "balance_sheet" | "cash_flow" | "unknown";
-export type BalanceField = "bank_balance" | "assets" | "receivables" | "equity" | "liabilities" | "cash_inflow" | "cash_outflow" | null;
+export type BalanceField =
+  | "bank_balance"
+  | "assets"
+  | "receivables"
+  | "equity"
+  | "liabilities"
+  | "cash_inflow"
+  | "cash_outflow"
+  | null;
 
 interface MappingDefinition {
   category: RowCategory;
@@ -147,12 +155,12 @@ const GFB_DICTIONARY: Record<string, MappingDefinition> = {
   "7302-MG-RV-LC": { category: "revenue", functionCode: "Conference", balanceField: null }, // LC | Project Mgt Revenue: Conference and Meetings (National+Local) Partner Fee
   "7303-MG-RV-LC": { category: "revenue", functionCode: "Conference", balanceField: null }, // LC | Project Mgt Revenue: Conference and Meetings (International) Participant Fee
   "7304-MG-RV-LC": { category: "revenue", functionCode: "Conference", balanceField: null }, // LC | Project Mgt Revenue: Conference and Meetings (International) Partner Fee
-  "7305-MG-RV-LC": { category: "revenue", functionCode: "BD", balanceField: null }, // LC | Project Mgt Revenue: Digital Engagement Participant Fee
-  "7306-MG-RV-LC": { category: "revenue", functionCode: "BD", balanceField: null }, // LC | Project Mgt Revenue: Digital Engagement Partner Fee
-  "7307-MG-RV-LC": { category: "revenue", functionCode: "BD", balanceField: null }, // LC | Project Mgt Revenue: Other Portfolio & Initiatives Partner Fee
-  "7308-MG-RV-LC": { category: "revenue", functionCode: "BD", balanceField: null }, // LC | Project Mgt Revenue: Other Portfolio & Initiatives Participant Fee
-  "7309-MG-RV-LC": { category: "revenue", functionCode: "BD", balanceField: null }, // LC | Project Mgt Revenue: Grants, Donations, Subsidies
-  "7501-NE-RV-LC": { category: "revenue", functionCode: "BD", balanceField: null }, // LC | Miscellaneous Revenue
+  "7305-MG-RV-LC": { category: "revenue", functionCode: "Miscellaneous", balanceField: null }, // LC | Project Mgt Revenue: Digital Engagement Participant Fee
+  "7306-MG-RV-LC": { category: "revenue", functionCode: "Miscellaneous", balanceField: null }, // LC | Project Mgt Revenue: Digital Engagement Partner Fee
+  "7307-MG-RV-LC": { category: "revenue", functionCode: "Miscellaneous", balanceField: null }, // LC | Project Mgt Revenue: Other Portfolio & Initiatives Partner Fee
+  "7308-MG-RV-LC": { category: "revenue", functionCode: "Miscellaneous", balanceField: null }, // LC | Project Mgt Revenue: Other Portfolio & Initiatives Participant Fee
+  "7309-MG-RV-LC": { category: "revenue", functionCode: "Miscellaneous", balanceField: null }, // LC | Project Mgt Revenue: Grants, Donations, Subsidies
+  "7501-NE-RV-LC": { category: "revenue", functionCode: "Miscellaneous", balanceField: null }, // LC | Miscellaneous Revenue
 
   // === PNL: COSTS ===
   "7601-EX-CO-LC": { category: "cost", functionCode: "iGV", balanceField: null }, // LC | Direct Costs: iGV Marketing
@@ -182,29 +190,29 @@ const GFB_DICTIONARY: Record<string, MappingDefinition> = {
   "7706-EA-CO-LC": { category: "cost", functionCode: "EwA", balanceField: null }, // LC | EwA Costs: Local Volunteer
   "7901-MG-CO-LC": { category: "cost", functionCode: "Conference", balanceField: null }, // LC | Project Mgt Costs: Conference and Meetings (National+Local)
   "7902-MG-CO-LC": { category: "cost", functionCode: "Conference", balanceField: null }, // LC | Project Mgt Costs: Conference and Meetings (International)
-  "7903-MG-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Project Mgt Costs: Digital Engagement
-  "7904-MG-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Project Mgt Costs: Other Portfolio & Initiatives
-  "7905-MG-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Project Mgt Costs: Partnership Logistics
-  "8001-FN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Bank Fees
-  "8002-FN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Taxes
-  "8101-OH-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Overhead Costs: (Office)
-  "8102-OH-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Overhead Costs: (HR)
-  "8103-OH-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Overhead Costs: (Legality)
-  "8104-OH-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Overhead Costs: (Planning & LnD)
-  "8105-OH-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Overhead Costs: Other Marketing
-  "8106-OH-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Overhead Costs: PR & Branding Costs
-  "8108-OH-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Overhead Costs: (National Conf. Travelling)
-  "8109-OH-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Overhead Costs: (International Conf. Travelling + Visa)
-  "8201-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Entity Affiliation Fee Costs: iGV Royalty
-  "8202-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Entity Affiliation Fee Costs: oGV Royalty
-  "8203-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Entity Affiliation Fee Costs: iGTa Royalty
-  "8204-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Entity Affiliation Fee Costs: oGTa Royalty
-  "8205-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Entity Affiliation Fee Costs: iGTe Royalty
-  "8206-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Entity Affiliation Fee Costs: oGTe Royalty
-  "8207-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Entity Affiliation Fee Costs: Fixed Payment
-  "8208-IN-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Entity Affiliation Fee Revenue: Other Variable Payment. // Keeping as "cost" pending confirmation from finance team, despite "Revenue" in description
-  "8401-NE-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Uncollectible Accounts Costs
-  "8402-NE-CO-LC": { category: "cost", functionCode: "BD", balanceField: null }, // LC | Miscellaneous Costs
+  "7903-MG-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Project Mgt Costs: Digital Engagement
+  "7904-MG-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Project Mgt Costs: Other Portfolio & Initiatives
+  "7905-MG-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Project Mgt Costs: Partnership Logistics
+  "8001-FN-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Bank Fees
+  "8002-FN-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Taxes
+  "8101-OH-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Overhead Costs: (Office)
+  "8102-OH-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Overhead Costs: (HR)
+  "8103-OH-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Overhead Costs: (Legality)
+  "8104-OH-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Overhead Costs: (Planning & LnD)
+  "8105-OH-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Overhead Costs: Other Marketing
+  "8106-OH-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Overhead Costs: PR & Branding Costs
+  "8108-OH-CO-LC": { category: "cost", functionCode: "National Conference Delegation", balanceField: null }, // LC | Overhead Costs: (National Conf. Travelling)
+  "8109-OH-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Overhead Costs: (International Conf. Travelling + Visa)
+  "8201-IN-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Entity Affiliation Fee Costs: iGV Royalty
+  "8202-IN-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Entity Affiliation Fee Costs: oGV Royalty
+  "8203-IN-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Entity Affiliation Fee Costs: iGTa Royalty
+  "8204-IN-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Entity Affiliation Fee Costs: oGTa Royalty
+  "8205-IN-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Entity Affiliation Fee Costs: iGTe Royalty
+  "8206-IN-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Entity Affiliation Fee Costs: oGTe Royalty
+  "8207-IN-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Entity Affiliation Fee Costs: Fixed Payment
+  "8208-IN-CO-LC": { category: "cost", functionCode: "NMF", balanceField: null }, // LC | Entity Affiliation Fee Revenue: Other Variable Payment. // Keeping as "cost" pending confirmation from finance team, despite "Revenue" in description
+  "8401-NE-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Uncollectible Accounts Costs
+  "8402-NE-CO-LC": { category: "cost", functionCode: "Miscellaneous", balanceField: null }, // LC | Miscellaneous Costs
 
   // === BALANCE SHEET: ASSETS, LIABILITIES, EQUITY ===
   "8501-CA-AS-LC": { category: "balance_sheet", functionCode: null, balanceField: "bank_balance" }, // LC | Bank Account
@@ -242,9 +250,11 @@ const GFB_DICTIONARY: Record<string, MappingDefinition> = {
 export function getGfbMapping(gfbCode: string): MappingDefinition {
   // Use the exact full code (trimmed and uppercase to be safe)
   const cleanCode = gfbCode.trim().toUpperCase();
-  
+
   // Return the mapped definition, or fallback if they invent a new code
-  return GFB_DICTIONARY[cleanCode] || { category: "unknown", functionCode: null, balanceField: null };
+  return (
+    GFB_DICTIONARY[cleanCode] || { category: "unknown", functionCode: null, balanceField: null }
+  );
 }
 
 // ─── Parsed row type ────────────────────────────────────────────────────────
@@ -274,7 +284,7 @@ export function parseRow(row: any[]): ParsedRow | null {
   const reportType = String(row[5] || "").trim();
   const gfbCode = String(row[6] || "").trim();
   const description = String(row[7] || "").trim();
-  
+
   const amountStr = String(row[8] || "0").replace(/[^0-9.\-]/g, "");
   const amount = parseFloat(amountStr) || 0;
 
@@ -304,5 +314,3 @@ export function parseRow(row: any[]): ParsedRow | null {
     balanceField: mapping.balanceField,
   };
 }
-
-
