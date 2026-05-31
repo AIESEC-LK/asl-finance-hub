@@ -64,6 +64,9 @@ export function Filters({ value, onChange, showFunctionFilter = true }: { value:
         <Label className="text-xs">To</Label>
         <Input type="date" value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} />
       </div>
+      
+      {/* <div className="space-y-1">
+
       {showFunctionFilter && (
         <div className="space-y-1">
           <Label className="text-xs">Function</Label>
@@ -77,6 +80,7 @@ export function Filters({ value, onChange, showFunctionFilter = true }: { value:
         </div>
       )}
       <div className="space-y-1">
+
         <Label className="text-xs">Term</Label>
         <Select value={value.term} onValueChange={(v) => onChange({ ...value, term: v })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -86,7 +90,7 @@ export function Filters({ value, onChange, showFunctionFilter = true }: { value:
             <SelectItem value="25-26">25-26</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </div> */}
     </div>
   );
 }

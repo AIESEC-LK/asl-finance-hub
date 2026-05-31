@@ -88,9 +88,10 @@ function OverviewPage() {
             {/* <KpiCard label="Asia Pacific Rank" value={`#${totals.apRank}`} icon={<Trophy className="h-4 w-4" />} accent="purple" /> */}
             <KpiCard label="Total Revenue" value={fmtCurrency(totals.totalRevenue)} icon={<Banknote className="h-4 w-4" />} accent="green" />
             <KpiCard label="Equity Growth" value={fmtPct(totals.equityGrowth)} icon={totals.equityGrowth >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />} accent={totals.equityGrowth >= 0 ? "green" : "red"} />
-            <KpiCard label="GPM" value={fmtPct(totals.gpm)} icon={<Activity className="h-4 w-4" />} accent="orange" />
-            <KpiCard label="Finance Health Index" value={totals.health.toFixed(0)} icon={<Heart className="h-4 w-4" />} accent="red" />
-            <KpiCard label="Finance OD Score" value={totals.odScore.toFixed(0)} icon={<Award className="h-4 w-4" />} accent="purple" />
+            {/* <KpiCard label="NPM" value={fmtPct(totals.npm)} icon={<Activity className="h-4 w-4" />} accent="teal" /> */}
+            <KpiCard label="GPM (avg)" value={fmtPct(totals.gpm)} icon={<Activity className="h-4 w-4" />} accent="orange" />
+            {/* <KpiCard label="Finance Health Index" value={totals.health.toFixed(0)} icon={<Heart className="h-4 w-4" />} accent="red" /> */}
+            {/* <KpiCard label="Finance OD Score" value={totals.odScore.toFixed(0)} icon={<Award className="h-4 w-4" />} accent="purple" /> */}
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
