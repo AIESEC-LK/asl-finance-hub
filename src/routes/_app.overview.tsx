@@ -76,7 +76,7 @@ function OverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold">Global Overview</h2>
+        <h2 className="text-2xl font-semibold">National Overview</h2>
         <p className="text-sm text-muted-foreground">National finance KPIs and trends.</p>
       </div>
       <Filters value={filters} onChange={setFilters} />
@@ -86,8 +86,8 @@ function OverviewPage() {
       {!loading && totals && (
         <>
           <div className="grid gap-4 md:grid-cols-4">
-            <KpiCard label="Global Ranking" value={`#${totals.globalRank}`} icon={<Globe className="h-4 w-4" />} accent="primary" />
-            <KpiCard label="Asia Pacific Rank" value={`#${totals.apRank}`} icon={<Trophy className="h-4 w-4" />} accent="purple" />
+            {/* <KpiCard label="Global Ranking" value={`#${totals.globalRank}`} icon={<Globe className="h-4 w-4" />} accent="primary" /> */}
+            {/* <KpiCard label="Asia Pacific Rank" value={`#${totals.apRank}`} icon={<Trophy className="h-4 w-4" />} accent="purple" /> */}
             <KpiCard label="Total Revenue" value={fmtCurrency(totals.totalRevenue)} icon={<Banknote className="h-4 w-4" />} accent="green" />
             <KpiCard label="Equity Growth" value={fmtPct(totals.equityGrowth)} icon={totals.equityGrowth >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />} accent={totals.equityGrowth >= 0 ? "green" : "red"} />
             <KpiCard label="NPM" value={fmtPct(totals.npm)} icon={<Activity className="h-4 w-4" />} accent="teal" />
