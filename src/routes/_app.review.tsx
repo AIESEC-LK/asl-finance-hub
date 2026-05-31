@@ -9,9 +9,9 @@ import { useAuth } from "@/lib/auth";
 import { fetchEntities, type Entity } from "@/lib/finance";
 import { format, parseISO } from "date-fns";
 
-export const Route = createFileRoute("/_app/review")({
-  component: ReviewPage,
-});
+// export const Route = createFileRoute("/_app/review")({
+//   component: ReviewPage,
+// });
 
 interface ReviewRow {
   entity_id: string;

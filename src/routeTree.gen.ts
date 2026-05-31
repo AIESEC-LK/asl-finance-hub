@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AppReviewRouteImport } from './routes/_app.review'
 import { Route as AppOverviewRouteImport } from './routes/_app.overview'
 import { Route as AppLcRouteImport } from './routes/_app.lc'
 import { Route as AppContactsRouteImport } from './routes/_app.contacts'
@@ -33,11 +32,6 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any)
-const AppReviewRoute = AppReviewRouteImport.update({
-  id: '/review',
-  path: '/review',
-  getParentRoute: () => AppRoute,
 } as any)
 const AppOverviewRoute = AppOverviewRouteImport.update({
   id: '/overview',
@@ -79,7 +73,6 @@ export interface FileRoutesByFullPath {
   '/contacts': typeof AppContactsRoute
   '/lc': typeof AppLcRoute
   '/overview': typeof AppOverviewRoute
-  '/review': typeof AppReviewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -90,7 +83,6 @@ export interface FileRoutesByTo {
   '/contacts': typeof AppContactsRoute
   '/lc': typeof AppLcRoute
   '/overview': typeof AppOverviewRoute
-  '/review': typeof AppReviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -103,7 +95,6 @@ export interface FileRoutesById {
   '/_app/contacts': typeof AppContactsRoute
   '/_app/lc': typeof AppLcRoute
   '/_app/overview': typeof AppOverviewRoute
-  '/_app/review': typeof AppReviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -116,7 +107,6 @@ export interface FileRouteTypes {
     | '/contacts'
     | '/lc'
     | '/overview'
-    | '/review'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -127,7 +117,6 @@ export interface FileRouteTypes {
     | '/contacts'
     | '/lc'
     | '/overview'
-    | '/review'
   id:
     | '__root__'
     | '/'
@@ -139,7 +128,6 @@ export interface FileRouteTypes {
     | '/_app/contacts'
     | '/_app/lc'
     | '/_app/overview'
-    | '/_app/review'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -170,13 +158,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/_app/review': {
-      id: '/_app/review'
-      path: '/review'
-      fullPath: '/review'
-      preLoaderRoute: typeof AppReviewRouteImport
-      parentRoute: typeof AppRoute
     }
     '/_app/overview': {
       id: '/_app/overview'
@@ -230,7 +211,6 @@ interface AppRouteChildren {
   AppContactsRoute: typeof AppContactsRoute
   AppLcRoute: typeof AppLcRoute
   AppOverviewRoute: typeof AppOverviewRoute
-  AppReviewRoute: typeof AppReviewRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -240,7 +220,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppContactsRoute: AppContactsRoute,
   AppLcRoute: AppLcRoute,
   AppOverviewRoute: AppOverviewRoute,
-  AppReviewRoute: AppReviewRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
