@@ -137,7 +137,7 @@ function LCDashboard() {
             <KpiCard label="Total Assets" value={fmtCurrency((latest.assets ?? 0) + (latest.bank_balance ?? 0) + (latest.receivables ?? 0) + (latest.petty_cash ?? 0) + (latest.reserves ?? 0))} icon={<Landmark className="h-4 w-4" />} accent="teal" />
             <KpiCard label="Liabilities" value={fmtCurrency(latest.liabilities)} icon={<ArrowDownCircle className="h-4 w-4" />} accent="red" />
             <KpiCard label="Receivables" value={fmtCurrency(latest.receivables)} icon={<ArrowUpCircle className="h-4 w-4" />} accent="orange" />
-            <KpiCard label="Liquidity" value={fmtNumber(latest.liquidity, 2)} icon={<Coins className="h-4 w-4" />} accent="green" />
+            {/* <KpiCard label="Liquidity" value={fmtNumber(latest.liquidity, 2)} icon={<Coins className="h-4 w-4" />} accent="green" /> */}
             <KpiCard label="Equity" value={fmtCurrency(latest.equity)} icon={<Banknote className="h-4 w-4" />} accent="purple" />
           </div>
 
