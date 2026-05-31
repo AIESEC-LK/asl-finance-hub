@@ -77,7 +77,7 @@ function OverviewPage() {
         <h2 className="text-2xl font-semibold">National Overview</h2>
         <p className="text-sm text-muted-foreground">National finance KPIs and trends.</p>
       </div>
-      <Filters value={filters} onChange={setFilters} />
+      <Filters value={filters} onChange={setFilters} showFunctionFilter={false} />
 
       {loading && <div className="text-sm text-muted-foreground">Loading metrics…</div>}
 
