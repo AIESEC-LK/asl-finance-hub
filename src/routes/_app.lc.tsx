@@ -74,6 +74,8 @@ function LCDashboard() {
       outflow: number;
       total_revenue: number;
       total_cost: number;
+      petty_cash: number;
+      reserves: number;
     }>();
 
     metrics.forEach((m) => {
@@ -89,6 +91,8 @@ function LCDashboard() {
         outflow: 0,
         total_revenue: 0,
         total_cost: 0,
+        petty_cash: 0,
+        reserves: 0,
       };
       cur.bank_balance += m.bank_balance ?? 0;
       cur.assets += m.assets ?? 0;
@@ -99,6 +103,8 @@ function LCDashboard() {
       cur.outflow += m.outflow ?? 0;
       cur.total_revenue += m.total_revenue ?? 0;
       cur.total_cost += m.total_cost ?? 0;
+      cur.petty_cash += m.petty_cash ?? 0;
+      cur.reserves += m.reserves ?? 0;
       byMonth.set(k, cur);
     });
 
