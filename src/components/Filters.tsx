@@ -74,7 +74,7 @@ export function Filters({ value, onChange }: { value: FilterState; onChange: (v:
           </SelectContent>
         </Select>
       </div>
-      <div className="space-y-1">
+      {/* <div className="space-y-1">
         <Label className="text-xs">Term</Label>
         <Select value={value.term} onValueChange={(v) => onChange({ ...value, term: v })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -84,7 +84,7 @@ export function Filters({ value, onChange }: { value: FilterState; onChange: (v:
             <SelectItem value="25-26">25-26</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </div> */}
     </div>
   );
 }
