@@ -8,9 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { fmtCurrency, fmtPct, type FunctionCode } from "@/lib/finance";
 
-export const Route = createFileRoute("/_app/budget")({
-  component: BudgetPage,
-});
+// export const Route = createFileRoute("/_app/budget")({
+//   component: BudgetPage,
+// });
 
 interface BARow {
   entity_id: string;

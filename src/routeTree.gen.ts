@@ -15,7 +15,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppOverviewRouteImport } from './routes/_app.overview'
 import { Route as AppLcRouteImport } from './routes/_app.lc'
 import { Route as AppContactsRouteImport } from './routes/_app.contacts'
-import { Route as AppBudgetRouteImport } from './routes/_app.budget'
 import { Route as AppAuditRouteImport } from './routes/_app.audit'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
 
@@ -48,11 +47,6 @@ const AppContactsRoute = AppContactsRouteImport.update({
   path: '/contacts',
   getParentRoute: () => AppRoute,
 } as any)
-const AppBudgetRoute = AppBudgetRouteImport.update({
-  id: '/budget',
-  path: '/budget',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppAuditRoute = AppAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -69,7 +63,6 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin': typeof AppAdminRoute
   '/audit': typeof AppAuditRoute
-  '/budget': typeof AppBudgetRoute
   '/contacts': typeof AppContactsRoute
   '/lc': typeof AppLcRoute
   '/overview': typeof AppOverviewRoute
@@ -79,7 +72,6 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin': typeof AppAdminRoute
   '/audit': typeof AppAuditRoute
-  '/budget': typeof AppBudgetRoute
   '/contacts': typeof AppContactsRoute
   '/lc': typeof AppLcRoute
   '/overview': typeof AppOverviewRoute
@@ -91,7 +83,6 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/admin': typeof AppAdminRoute
   '/_app/audit': typeof AppAuditRoute
-  '/_app/budget': typeof AppBudgetRoute
   '/_app/contacts': typeof AppContactsRoute
   '/_app/lc': typeof AppLcRoute
   '/_app/overview': typeof AppOverviewRoute
@@ -103,20 +94,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/audit'
-    | '/budget'
     | '/contacts'
     | '/lc'
     | '/overview'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/login'
-    | '/admin'
-    | '/audit'
-    | '/budget'
-    | '/contacts'
-    | '/lc'
-    | '/overview'
+  to: '/' | '/login' | '/admin' | '/audit' | '/contacts' | '/lc' | '/overview'
   id:
     | '__root__'
     | '/'
@@ -124,7 +106,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/admin'
     | '/_app/audit'
-    | '/_app/budget'
     | '/_app/contacts'
     | '/_app/lc'
     | '/_app/overview'
@@ -180,13 +161,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppContactsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/budget': {
-      id: '/_app/budget'
-      path: '/budget'
-      fullPath: '/budget'
-      preLoaderRoute: typeof AppBudgetRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/audit': {
       id: '/_app/audit'
       path: '/audit'
@@ -207,7 +181,6 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppAuditRoute: typeof AppAuditRoute
-  AppBudgetRoute: typeof AppBudgetRoute
   AppContactsRoute: typeof AppContactsRoute
   AppLcRoute: typeof AppLcRoute
   AppOverviewRoute: typeof AppOverviewRoute
@@ -216,7 +189,6 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
   AppAuditRoute: AppAuditRoute,
-  AppBudgetRoute: AppBudgetRoute,
   AppContactsRoute: AppContactsRoute,
   AppLcRoute: AppLcRoute,
   AppOverviewRoute: AppOverviewRoute,
