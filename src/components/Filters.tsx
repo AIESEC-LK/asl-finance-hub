@@ -24,8 +24,19 @@ export function defaultFilters(): FilterState {
   };
 }
 
-
-export function Filters({ value, onChange, showFunctionFilter = true }: { value: FilterState; onChange: (v: FilterState) => void; showFunctionFilter?: boolean }) {
+export function Filters({
+  value,
+  onChange,
+  showFunctionFilter = true,
+  showTermFilter = true,
+  showDateFilters = true,
+}: {
+  value: FilterState;
+  onChange: (v: FilterState) => void;
+  showFunctionFilter?: boolean;
+  showTermFilter?: boolean;
+  showDateFilters?: boolean;
+}) {
   const { isLC, isMC, isEFB, profile } = useAuth();
   const [entities, setEntities] = useState<Entity[]>([]);
 
@@ -42,8 +53,22 @@ export function Filters({ value, onChange, showFunctionFilter = true }: { value:
 
   const lockEntity = isLC && !isMC && !isEFB;
 
+  let visibleCols = 0;
+  if (!lockEntity) visibleCols++;
+  if (showDateFilters) visibleCols += 2;
+  if (showFunctionFilter) visibleCols++;
+  if (showTermFilter) visibleCols++;
+
+  const colsClass = visibleCols === 1
+    ? "md:grid-cols-1 max-w-xs"
+    : visibleCols === 2
+    ? "md:grid-cols-2 max-w-md"
+    : visibleCols === 3
+    ? "md:grid-cols-3 max-w-lg"
+    : "md:grid-cols-5";
+
   return (
-    <div className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-5">
+    <div className={`grid gap-3 rounded-lg border bg-card p-4 ${colsClass}`}>
       {!lockEntity && (
         <div className="space-y-1">
           <Label className="text-xs">Entity</Label>
@@ -56,17 +81,19 @@ export function Filters({ value, onChange, showFunctionFilter = true }: { value:
           </Select>
         </div>
       )}
-      <div className="space-y-1">
-        <Label className="text-xs">From</Label>
-        <Input type="date" value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} />
-      </div>
-      <div className="space-y-1">
-        <Label className="text-xs">To</Label>
-        <Input type="date" value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} />
-      </div>
+      {showDateFilters && (
+        <>
+          <div className="space-y-1">
+            <Label className="text-xs">From</Label>
+            <Input type="date" value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">To</Label>
+            <Input type="date" value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} />
+          </div>
+        </>
+      )}
       
-      {/* <div className="space-y-1">
-
       {showFunctionFilter && (
         <div className="space-y-1">
           <Label className="text-xs">Function</Label>
@@ -79,18 +106,19 @@ export function Filters({ value, onChange, showFunctionFilter = true }: { value:
           </Select>
         </div>
       )}
-      <div className="space-y-1">
-
-        <Label className="text-xs">Term</Label>
-        <Select value={value.term} onValueChange={(v) => onChange({ ...value, term: v })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All terms</SelectItem>
-            <SelectItem value="24-25">24-25</SelectItem>
-            <SelectItem value="25-26">25-26</SelectItem>
-          </SelectContent>
-        </Select>
-      </div> */}
+      {showTermFilter && (
+        <div className="space-y-1">
+          <Label className="text-xs">Term</Label>
+          <Select value={value.term} onValueChange={(v) => onChange({ ...value, term: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All terms</SelectItem>
+              <SelectItem value="24-25">24-25</SelectItem>
+              <SelectItem value="25-26">25-26</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
     </div>
   );
 }

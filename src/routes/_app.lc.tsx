@@ -7,8 +7,10 @@ import { fetchMetrics, fmtCurrency, fmtPct, fmtNumber, FUNCTION_CODES, type Func
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
-import { Banknote, Wallet, ArrowDownCircle, ArrowUpCircle, Landmark, Coins, TrendingUp, TrendingDown, Activity } from "lucide-react";
+import { Banknote, Wallet, ArrowDownCircle, ArrowUpCircle, Landmark, Coins, TrendingUp, TrendingDown, Activity, X, Plus } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Legend, PieChart, Pie, Cell } from "recharts";
+import { Button } from "@/components/ui/button";
+import { PnLReport } from "@/components/PnLReport";
 
 export const Route = createFileRoute("/_app/lc")({
   component: LCDashboard,
@@ -34,17 +36,91 @@ const CustomLegend = (props: any) => {
 
 interface FnRow { entity_id: string; period_month: string; function_code: FunctionCode; amount: number }
 
-function LCDashboard() {
+interface DashboardSplitProps {
+  config: {
+    entity: string | null;
+    term: string;
+    function: string;
+    from: string;
+    to: string;
+    viewMode: string;
+  };
+  onUpdate: (config: {
+    entity: string | null;
+    term: string;
+    function: string;
+    from: string;
+    to: string;
+    viewMode: string;
+  }) => void;
+  onRemove: () => void;
+  isSplit: boolean;
+}
+
+function calculateTermFromDate(dateStr: string): string {
+  if (!dateStr) return "all";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "all";
+  
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0 = January, 1 = February
+  
+  // AIESEC term starts in February
+  const termStartYear = month >= 1 ? year : year - 1;
+  const startShort = termStartYear % 100;
+  const endShort = (termStartYear + 1) % 100;
+  
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(startShort)}-${pad(endShort)}`;
+}
+
+function DashboardSplit({ config, onUpdate, onRemove, isSplit }: DashboardSplitProps) {
   const { profile, isLC, isMC, isEFB } = useAuth();
-  const [filters, setFilters] = useState<FilterState>(defaultFilters());
+  const [filters, setFilters] = useState<FilterState>(() => ({
+    ...defaultFilters(),
+    entityId: config.entity || "all",
+    term: config.term || "all",
+    functionCode: (config.function as FunctionCode) || "all",
+    from: config.from,
+    to: config.to,
+  }));
   const [metrics, setMetrics] = useState<MonthlyMetric[]>([]);
   const [revenue, setRevenue] = useState<FnRow[]>([]);
   const [costs, setCosts] = useState<FnRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setFilters((prev) => {
+      const nextEntityId = config.entity || "all";
+      const nextTerm = config.term || "all";
+      const nextFunctionCode = (config.function as FunctionCode) || "all";
+      const nextFrom = config.from;
+      const nextTo = config.to;
+      if (
+        prev.entityId !== nextEntityId ||
+        prev.term !== nextTerm ||
+        prev.functionCode !== nextFunctionCode ||
+        prev.from !== nextFrom ||
+        prev.to !== nextTo
+      ) {
+        return {
+          ...prev,
+          entityId: nextEntityId,
+          term: nextTerm,
+          functionCode: nextFunctionCode,
+          from: nextFrom,
+          to: nextTo,
+        };
+      }
+      return prev;
+    });
+  }, [config.entity, config.term, config.function, config.from, config.to]);
+
+  useEffect(() => {
     const lockEntity = isLC && !isMC && !isEFB;
     const entityId = lockEntity ? profile?.entity_id : filters.entityId !== "all" ? filters.entityId : null;
+
+
 
     setLoading(true);
     (async () => {
@@ -54,13 +130,25 @@ function LCDashboard() {
         loadFn("revenue_streams", ids, filters),
         loadFn("cost_breakdown", ids, filters),
       ]);
-      const f = (rows: MonthlyMetric[]) => filters.term === "all" ? rows : rows.filter((r) => r.term === filters.term);
-      setMetrics(f(m));
+      setMetrics(m);
       setRevenue(rev);
       setCosts(c);
       setLoading(false);
     })();
   }, [filters, profile?.entity_id, isLC, isMC, isEFB]);
+
+  const handleFilterChange = (newFilters: FilterState) => {
+    setFilters(newFilters);
+    const calculatedTerm = calculateTermFromDate(newFilters.from);
+    onUpdate({
+      entity: newFilters.entityId === "all" ? null : newFilters.entityId,
+      term: calculatedTerm,
+      function: newFilters.functionCode,
+      from: newFilters.from,
+      to: newFilters.to,
+      viewMode: config.viewMode,
+    });
+  };
 
   const aggregatedMetrics = useMemo(() => {
     const byMonth = new Map<string, {
@@ -176,37 +264,77 @@ function LCDashboard() {
     return avgMonthlyCost > 0 ? +(numerator / avgMonthlyCost).toFixed(2) : null;
   }, [metrics, latest]);
 
+  const isLoading = loading;
+  const data = metrics;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold">LC Dashboard</h2>
-        <p className="text-sm text-muted-foreground">Local Committee detailed financial view.</p>
+      <div className="flex flex-wrap items-center justify-between gap-4 gap-y-2 pb-4 border-b">
+        <div className="flex-grow">
+          <Filters 
+            value={filters} 
+            onChange={handleFilterChange} 
+            showFunctionFilter={false} 
+            showTermFilter={false} 
+            showDateFilters={true}
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex rounded-md border p-0.5 bg-muted">
+            <button
+              onClick={() => onUpdate({ ...config, viewMode: "graphical" })}
+              className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-all cursor-pointer ${
+                config.viewMode === "graphical"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Graphical
+            </button>
+            <button
+              onClick={() => onUpdate({ ...config, viewMode: "report" })}
+              className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-all cursor-pointer ${
+                config.viewMode === "report"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Report
+            </button>
+          </div>
+          <Button variant="outline" size="icon" className="h-10 w-10" onClick={onRemove} title="Remove Split">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
-      <Filters value={filters} onChange={setFilters} />
 
-      {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
+      {isLoading && <div className="p-8 text-center text-gray-500">Loading financial data...</div>}
 
-      {!loading && latest && (
-        <>
-          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-            <KpiCard label="Bank Balance" value={fmtCurrency(latest.bank_balance)} icon={<Wallet className="h-4 w-4" />} accent="primary" />
+      {!isLoading && (!data || data.length === 0) && (
+        <div className="p-8 text-center text-gray-500">No data available for this selection.</div>
+      )}
+
+      {!isLoading && data && data.length > 0 && config.viewMode === "graphical" && latest && (
+        <div className="mt-4 space-y-4">
+          <div className={isSplit ? "flex flex-wrap gap-3" : "grid gap-4 md:grid-cols-3 lg:grid-cols-5"}>
+            <KpiCard label="Bank Balance" value={fmtCurrency(latest.bank_balance)} icon={<Wallet className="h-4 w-4" />} accent="primary" className={isSplit ? "flex-grow min-w-[140px]" : ""} />
             {/* Total Assets = assets + bank_balance + receivables + petty_cash + reserves.
                 petty_cash (8502) and reserves (8602) are stored in separate DB columns (not merged into assets)
                 to allow the MoCR numerator to be calculated precisely. No double-counting in the backend. */}
-            <KpiCard label="Total Assets" value={fmtCurrency((latest.assets ?? 0) + (latest.bank_balance ?? 0) + (latest.receivables ?? 0) + (latest.petty_cash ?? 0) + (latest.reserves ?? 0))} icon={<Landmark className="h-4 w-4" />} accent="teal" />
-            <KpiCard label="Liabilities" value={fmtCurrency(latest.liabilities)} icon={<ArrowDownCircle className="h-4 w-4" />} accent="red" />
-            <KpiCard label="Receivables" value={fmtCurrency(latest.receivables)} icon={<ArrowUpCircle className="h-4 w-4" />} accent="orange" />
+            <KpiCard label="Total Assets" value={fmtCurrency((latest.assets ?? 0) + (latest.bank_balance ?? 0) + (latest.receivables ?? 0) + (latest.petty_cash ?? 0) + (latest.reserves ?? 0))} icon={<Landmark className="h-4 w-4" />} accent="teal" className={isSplit ? "flex-grow min-w-[140px]" : ""} />
+            <KpiCard label="Liabilities" value={fmtCurrency(latest.liabilities)} icon={<ArrowDownCircle className="h-4 w-4" />} accent="red" className={isSplit ? "flex-grow min-w-[140px]" : ""} />
+            <KpiCard label="Receivables" value={fmtCurrency(latest.receivables)} icon={<ArrowUpCircle className="h-4 w-4" />} accent="orange" className={isSplit ? "flex-grow min-w-[140px]" : ""} />
             {/* <KpiCard label="Liquidity" value={fmtNumber(latest.liquidity, 2)} icon={<Coins className="h-4 w-4" />} accent="green" /> */}
-            <KpiCard label="Equity" value={fmtCurrency(latest.equity)} icon={<Banknote className="h-4 w-4" />} accent="purple" />
+            <KpiCard label="Equity" value={fmtCurrency(latest.equity)} icon={<Banknote className="h-4 w-4" />} accent="purple" className={isSplit ? "flex-grow min-w-[140px]" : ""} />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className={isSplit ? "flex flex-wrap gap-3" : "grid gap-4 md:grid-cols-4"}>
             {/* <KpiCard label="NPM (Term)" value={fmtPct(termNpm)} icon={<Activity className="h-4 w-4" />} accent="teal" /> */}
-            <KpiCard label="Equity Change" value={fmtPct(equityChange ?? 0)} icon={equityChange !== null && equityChange >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />} accent={equityChange !== null && equityChange >= 0 ? "green" : "red"} />
-            <KpiCard label="Total Revenue" value={fmtCurrency(metrics.reduce((s, m) => s + (m.total_revenue ?? 0), 0))} icon={<Banknote className="h-4 w-4" />} accent="green" />
-            <KpiCard label="Total Cost" value={fmtCurrency(metrics.reduce((s, m) => s + (m.total_cost ?? 0), 0))} icon={<ArrowDownCircle className="h-4 w-4" />} accent="red" />
+            <KpiCard label="Equity Change" value={fmtPct(equityChange ?? 0)} icon={equityChange !== null && equityChange >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />} accent={equityChange !== null && equityChange >= 0 ? "green" : "red"} className={isSplit ? "flex-grow min-w-[140px]" : ""} />
+            <KpiCard label="Total Revenue" value={fmtCurrency(metrics.reduce((s, m) => s + (m.total_revenue ?? 0), 0))} icon={<Banknote className="h-4 w-4" />} accent="green" className={isSplit ? "flex-grow min-w-[140px]" : ""} />
+            <KpiCard label="Total Cost" value={fmtCurrency(metrics.reduce((s, m) => s + (m.total_cost ?? 0), 0))} icon={<ArrowDownCircle className="h-4 w-4" />} accent="red" className={isSplit ? "flex-grow min-w-[140px]" : ""} />
             {/* MoCR = (bank_balance + petty_cash + reserves - liabilities) / avg monthly cost (last 12 months) */}
-            <KpiCard label="MoCR" value={mocr !== null ? `${fmtNumber(mocr, 2)}` : "—"} icon={<Activity className="h-4 w-4" />} accent="teal" />
+            <KpiCard label="MoCR" value={mocr !== null ? `${fmtNumber(mocr, 2)}` : "—"} icon={<Activity className="h-4 w-4" />} accent="teal" className={isSplit ? "flex-grow min-w-[140px]" : ""} />
           </div>
 
           <Card>
@@ -265,49 +393,55 @@ function LCDashboard() {
           <div className="grid gap-4 lg:grid-cols-3">
             <Card>
               <CardHeader><CardTitle className="text-base">Revenue by function</CardTitle></CardHeader>
-              <CardContent className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={revByFnPie} dataKey="amount" nameKey="fn" innerRadius={50} outerRadius={90}>
-                      {revByFnPie.map((_, i) => <Cell key={i} fill={FN_COLORS[i % FN_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
-                    <Legend content={<CustomLegend />} />
-                  </PieChart>
-                </ResponsiveContainer>
+              <CardContent className="h-72 overflow-x-auto">
+                <div className="min-w-[300px] h-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={revByFnPie} dataKey="amount" nameKey="fn" innerRadius={50} outerRadius={90}>
+                        {revByFnPie.map((_, i) => <Cell key={i} fill={FN_COLORS[i % FN_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
+                      <Legend content={<CustomLegend />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle className="text-base">Cost by function</CardTitle></CardHeader>
-              <CardContent className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={costByFn} dataKey="amount" nameKey="fn" innerRadius={50} outerRadius={90}>
-                      {costByFn.map((_, i) => <Cell key={i} fill={FN_COLORS[i % FN_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
-                    <Legend content={<CustomLegend />} />
-                  </PieChart>
-                </ResponsiveContainer>
+              <CardContent className="h-72 overflow-x-auto">
+                <div className="min-w-[300px] h-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={costByFn} dataKey="amount" nameKey="fn" innerRadius={50} outerRadius={90}>
+                        {costByFn.map((_, i) => <Cell key={i} fill={FN_COLORS[i % FN_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(v) => fmtCurrency(Number(v))} />
+                      <Legend content={<CustomLegend />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle className="text-base">GPM by function (%)</CardTitle></CardHeader>
-              <CardContent className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={gpmByFn}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="fn" tick={{ fontSize: 11, angle: -45, textAnchor: "end", dy: 8 }} height={60} interval={0} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v) => `${Number(v).toFixed(2)}%`} />
+              <CardContent className="w-full overflow-x-auto">
+                <div className="min-w-[400px]">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={gpmByFn}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="fn" tick={{ fontSize: 11, angle: -45, textAnchor: "end", dy: 8 }} height={60} interval={0} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v) => `${Number(v).toFixed(2)}%`} />
 
-                    <Bar dataKey="gpm">
-                      {gpmByFn.map((_, i) => (
-                        <Cell key={`cell-${i}`} fill={FN_COLORS[i % FN_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                      <Bar dataKey="gpm">
+                        {gpmByFn.map((_, i) => (
+                          <Cell key={`cell-${i}`} fill={FN_COLORS[i % FN_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -346,19 +480,139 @@ function LCDashboard() {
               </CardContent>
             </Card>
           </div>
-        </>
+        </div>
       )}
 
-      {!loading && !latest && (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
-          {isLC && !profile?.entity_id ? "Your account is not assigned to an entity yet. Ask MC admin to assign one." : "No data for the selected filters."}
-        </CardContent></Card>
+      {!isLoading && data && data.length > 0 && config.viewMode === "report" && (
+        <div className="mt-4">
+          <PnLReport revenue={revenue} costs={costs} isSplit={isSplit} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LCDashboard() {
+  const [views, setViews] = useState<{
+    id: string;
+    entity: string;
+    term: string;
+    function: string;
+    from: string;
+    to: string;
+    viewMode: string;
+  }[]>(() => {
+    const defaultF = defaultFilters();
+    return [
+      {
+        id: "1",
+        entity: "Select LC",
+        term: "25-26",
+        function: "all",
+        from: defaultF.from,
+        to: defaultF.to,
+        viewMode: "graphical",
+      },
+    ];
+  });
+
+  const handleAddView = () => {
+    const defaultF = defaultFilters();
+    const newId = Date.now().toString();
+    setViews((prev) => [
+      ...prev,
+      {
+        id: newId,
+        entity: "Select LC",
+        term: "25-26",
+        function: "all",
+        from: defaultF.from,
+        to: defaultF.to,
+        viewMode: "graphical",
+      },
+    ]);
+  };
+
+  const handleUpdate = (
+    id: string,
+    newConfig: {
+      entity: string | null;
+      term: string;
+      function: string;
+      from: string;
+      to: string;
+      viewMode: string;
+    }
+  ) => {
+    setViews((prev) =>
+      prev.map((v) =>
+        v.id === id
+          ? {
+              ...v,
+              entity: newConfig.entity || "Select LC",
+              term: newConfig.term,
+              function: newConfig.function,
+              from: newConfig.from,
+              to: newConfig.to,
+              viewMode: newConfig.viewMode,
+            }
+          : v
+      )
+    );
+  };
+
+  const handleRemove = (id: string) => {
+    setViews((prev) => prev.filter((v) => v.id !== id));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold">LC Dashboard</h2>
+          <p className="text-sm text-muted-foreground">Local Committee detailed financial view.</p>
+        </div>
+        <Button onClick={handleAddView} className="gap-2">
+          <Plus className="h-4 w-4" /> Add Split View
+        </Button>
+      </div>
+
+      {views.length === 0 ? (
+        <Card className="border-dashed p-12 text-center">
+          <CardContent className="space-y-4 pt-6">
+            <p className="text-muted-foreground">No active split views. Add a split view to compare financial metrics.</p>
+            <Button onClick={handleAddView} className="gap-2 mx-auto">
+              <Plus className="h-4 w-4" /> Add Split View
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className={views.length > 1 ? "flex flex-row flex-nowrap overflow-x-auto gap-6 p-4 w-full" : "grid grid-cols-1 gap-8 w-full"}>
+          {views.map((view) => (
+            <div key={view.id} className={views.length > 1 ? "flex-shrink-0 w-full md:w-[calc(50%-12px)] border rounded-xl p-3 md:p-6 bg-card/50 shadow-sm space-y-4" : ""}>
+              <DashboardSplit
+                config={{
+                  entity: view.entity === "Select LC" ? null : view.entity,
+                  term: view.term,
+                  function: view.function,
+                  from: view.from,
+                  to: view.to,
+                  viewMode: view.viewMode,
+                }}
+                onUpdate={(newConfig) => handleUpdate(view.id, newConfig)}
+                onRemove={() => handleRemove(view.id)}
+                isSplit={views.length > 1}
+              />
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
 async function loadFn(table: "revenue_streams" | "cost_breakdown", ids: string[] | undefined, f: FilterState): Promise<FnRow[]> {
+
   let q = supabase.from(table).select("entity_id,period_month,function_code,amount");
   if (ids) q = q.in("entity_id", ids);
   if (f.from) q = q.gte("period_month", f.from);
