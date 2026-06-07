@@ -11,6 +11,7 @@ import { Banknote, Wallet, ArrowDownCircle, ArrowUpCircle, Landmark, Coins, Tren
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Legend, PieChart, Pie, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
 import { PnLReport } from "@/components/PnLReport";
+import { DashboardDock } from "@/components/DashboardDock";
 
 export const Route = createFileRoute("/_app/lc")({
   component: LCDashboard,
@@ -55,6 +56,9 @@ interface DashboardSplitProps {
   }) => void;
   onRemove: () => void;
   isSplit: boolean;
+  onMove?: (direction: "left" | "right") => void;
+  isFirst?: boolean;
+  isLast?: boolean;
 }
 
 function calculateTermFromDate(dateStr: string): string {
@@ -74,7 +78,7 @@ function calculateTermFromDate(dateStr: string): string {
   return `${pad(startShort)}-${pad(endShort)}`;
 }
 
-function DashboardSplit({ config, onUpdate, onRemove, isSplit }: DashboardSplitProps) {
+function DashboardSplit({ config, onUpdate, onRemove, isSplit, onMove, isFirst, isLast }: DashboardSplitProps) {
   const { profile, isLC, isMC, isEFB } = useAuth();
   const [filters, setFilters] = useState<FilterState>(() => ({
     ...defaultFilters(),
@@ -300,6 +304,16 @@ function DashboardSplit({ config, onUpdate, onRemove, isSplit }: DashboardSplitP
               Report
             </button>
           </div>
+          {isSplit && !isFirst && (
+            <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => onMove?.("left")} title="Move Left">
+              ←
+            </Button>
+          )}
+          {isSplit && !isLast && (
+            <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => onMove?.("right")} title="Move Right">
+              →
+            </Button>
+          )}
           <Button variant="outline" size="icon" className="h-10 w-10" onClick={onRemove} title="Remove Split">
             <X className="h-4 w-4" />
           </Button>
@@ -590,6 +604,18 @@ function LCDashboard() {
     setViews((prev) => prev.filter((v) => v.id !== id));
   };
 
+  const handleMove = (index: number, direction: "left" | "right") => {
+    setViews((prev) => {
+      const next = [...prev];
+      const targetIndex = direction === "left" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= next.length) return prev;
+      const temp = next[index];
+      next[index] = next[targetIndex];
+      next[targetIndex] = temp;
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -617,8 +643,8 @@ function LCDashboard() {
             ref={scrollContainerRef}
             className="flex flex-row flex-nowrap overflow-x-auto gap-6 p-4 w-full h-full items-start"
           >
-            {views.map((view) => (
-              <div key={view.id} className={`${views.length === 1 ? "w-full" : "flex-none w-[500px]"} border rounded-xl p-3 md:p-6 bg-card/50 shadow-sm space-y-4`}>
+            {views.map((view, index) => (
+              <div key={view.id} id={`card-${view.id}`} className={`${views.length === 1 ? "w-full" : "flex-none w-[500px]"} border rounded-xl p-3 md:p-6 bg-card/50 shadow-sm space-y-4`}>
                 <DashboardSplit
                   config={{
                     entity: view.entity === "Select LC" ? null : view.entity,
@@ -631,6 +657,9 @@ function LCDashboard() {
                   onUpdate={(newConfig) => handleUpdate(view.id, newConfig)}
                   onRemove={() => handleRemove(view.id)}
                   isSplit={views.length > 1}
+                  onMove={(direction) => handleMove(index, direction)}
+                  isFirst={index === 0}
+                  isLast={index === views.length - 1}
                 />
               </div>
             ))}
@@ -649,6 +678,8 @@ function LCDashboard() {
           >
             <ChevronRight className="h-5 w-5" />
           </button>
+
+          <DashboardDock views={views} onReorder={setViews} onRemove={handleRemove} />
         </div>
       )}
     </div>
