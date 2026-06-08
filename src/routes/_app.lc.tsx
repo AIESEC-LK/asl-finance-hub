@@ -556,6 +556,14 @@ function LCDashboard() {
     const handleScroll = () => {
       const canScrollRight = container.scrollWidth - container.scrollLeft > container.clientWidth + 5;
       setShowScrollHint(canScrollRight);
+
+      window.dispatchEvent(new CustomEvent('pnl-scroll-metrics', {
+        detail: { 
+          scrollLeft: container.scrollLeft, 
+          scrollWidth: container.scrollWidth, 
+          clientWidth: container.clientWidth 
+        }
+      }));
     };
 
     handleScroll();
@@ -571,6 +579,16 @@ function LCDashboard() {
       resizeObserver.disconnect();
     };
   }, [views, viewMode]);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (viewMode === 'charts' && scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({ left: e.detail, behavior: 'smooth' });
+      }
+    };
+    window.addEventListener('pnl-scroll-to', handler);
+    return () => window.removeEventListener('pnl-scroll-to', handler);
+  }, [viewMode]);
 
   const handleAddView = () => {
     const defaultF = defaultFilters();

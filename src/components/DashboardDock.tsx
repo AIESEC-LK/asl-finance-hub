@@ -68,7 +68,7 @@ function SortableDockItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative shrink-0 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md transition-all duration-300 min-w-[80px] max-w-[120px] hover:bg-[#0268c7] text-white/70 hover:text-white`}
+      className={`group relative shrink-0 flex items-center justify-center gap-1 px-1 py-1.5 rounded-md transition-all duration-300 min-w-[80px] max-w-[120px] hover:bg-[#0268c7] text-white/70 hover:text-white`}
     >
       {/* Grip Handle */}
       <div
@@ -124,7 +124,7 @@ export function DashboardDock({ views, onReorder, onRemove, activeMatrixId }: Da
     const clickPercentage = clickX / rect.width;
     const newScrollLeft = clickPercentage * scrollMetrics.scrollWidth;
     const centeredScrollLeft = newScrollLeft - (scrollMetrics.clientWidth / 2);
-    
+
     window.dispatchEvent(new CustomEvent('pnl-scroll-to', { detail: centeredScrollLeft }));
   };
 
@@ -220,48 +220,50 @@ export function DashboardDock({ views, onReorder, onRemove, activeMatrixId }: Da
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 w-max max-w-[90vw]">
-        <div className="flex flex-nowrap items-center gap-1 bg-[#037EF3] text-white shadow-2xl rounded-full px-3 py-1.5 h-10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] w-full overflow-x-auto">
+      <div className="fixed bottom-1.5 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-1.5 w-max max-w-[90vw] bg-white/50 backdrop-blur-xl p-1.5 rounded-[1.5rem] shadow-[0_4px_16px_rgba(0,0,0,0.1)] border border-white/60">
+        <div className="flex flex-nowrap items-center gap-1 bg-[#037EF3] text-white rounded-full px-3 py-1.5 h-10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] w-full overflow-x-auto">
           <SortableContext
             items={views.map((v) => v.id)}
             strategy={horizontalListSortingStrategy}
           >
-          {views.map((view) => {
-            const isActive = activeMatrixId ? activeMatrixId === view.id : activeId === view.id;
-            const matchedEntity = entities.find((e) => e.id === view.entity);
-            
-            // Map local state to requested display keys
-            const rawEntityName = view.entity === "Select LC" ? "Unassigned LC" : (matchedEntity?.name || "Unknown");
-            const entityName = formatEntityName(rawEntityName);
-            const dateRange = view.from && view.to
-              ? `${formatDate(view.from)} - ${formatDate(view.to)}`
-              : view.term || "No Date";
+            {views.map((view) => {
+              const isActive = activeMatrixId ? activeMatrixId === view.id : activeId === view.id;
+              const matchedEntity = entities.find((e) => e.id === view.entity);
 
-            return (
-              <SortableDockItem
-                key={view.id}
-                view={view}
-                isActive={isActive}
-                entityName={entityName}
-                dateRange={dateRange}
-                onClick={() => handleScrollToCard(view.id)}
-                onRemove={() => onRemove(view.id)}
-              />
-            );
-          })}
-        </SortableContext>
+              // Map local state to requested display keys
+              const rawEntityName = view.entity === "Select LC" ? "Unassigned LC" : (matchedEntity?.name || "Unknown");
+              const entityName = formatEntityName(rawEntityName);
+              const dateRange = view.from && view.to
+                ? `${formatDate(view.from)} - ${formatDate(view.to)}`
+                : view.term || "No Date";
+
+              return (
+                <SortableDockItem
+                  key={view.id}
+                  view={view}
+                  isActive={isActive}
+                  entityName={entityName}
+                  dateRange={dateRange}
+                  onClick={() => handleScrollToCard(view.id)}
+                  onRemove={() => onRemove(view.id)}
+                />
+              );
+            })}
+          </SortableContext>
         </div>
-        
-        {activeMatrixId && showIndicator && (
-          <div 
-            ref={scrollbarRef}
-            onClick={handleTrackClick}
-            className="w-full h-2 bg-gray-100 rounded-full relative overflow-hidden cursor-pointer shadow-sm"
-          >
-            <div 
-              className="absolute top-0 h-full bg-blue-500 rounded-full pointer-events-none transition-all duration-75"
-              style={{ width: `${widthPercentage}%`, left: `${leftPercentage}%` }}
-            />
+
+        {showIndicator && (
+          <div className="w-[95%] px-1 pb-1">
+            <div
+              ref={scrollbarRef}
+              onClick={handleTrackClick}
+              className="w-full h-2 bg-black/10 rounded-full relative overflow-hidden cursor-pointer"
+            >
+              <div
+                className="absolute top-0 h-full bg-[#037EF3] rounded-full pointer-events-none transition-all duration-75"
+                style={{ width: `${widthPercentage}%`, left: `${leftPercentage}%` }}
+              />
+            </div>
           </div>
         )}
       </div>
