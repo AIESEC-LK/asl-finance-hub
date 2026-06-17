@@ -80,14 +80,14 @@ function ContactsPage() {
         ))}
       </div>
 
-      {/* <Card>
+      <Card>
         <CardHeader><CardTitle className="text-base">About roles</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p><strong className="text-foreground">LC user</strong> — LCVP Finance &amp; Legal / LCP. Sees only their own entity's data.</p>
           <p><strong className="text-foreground">MC user</strong> — MCVP FnL / MCVP IM / MCP. Full national visibility &amp; admin.</p>
           <p><strong className="text-foreground">EFB user</strong> — Audit role. Read-only across all entities, can record audit scores and reviews.</p>
         </CardContent>
-      </Card> */}
+      </Card>
     </div>
   );
 }
