@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { fetchEntities, type Entity } from "@/lib/finance";
 import { useAuth, type AppRole } from "@/lib/auth";
 import { useSheetSync, type SyncMode } from "@/hooks/useSheetSync";
+import { useAuditSync } from "@/hooks/useAuditSync";
 import { AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -50,6 +51,12 @@ interface UserRow {
 function AdminPage() {
   const { user } = useAuth();
   const { sync, loading, result, error } = useSheetSync();
+  const {
+    sync: syncAudit,
+    loading: auditLoading,
+    result: auditResult,
+    error: auditError,
+  } = useAuditSync();
   const [entities, setEntities] = useState<Entity[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
@@ -277,6 +284,73 @@ function AdminPage() {
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">EFB Audit Sync</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Rebuilds the audit master sheet from the EFB Audit Performance Dashboard, then pulls
+            results &amp; scores into Supabase.
+          </p>
+
+          <Button onClick={() => syncAudit()} disabled={auditLoading} className="w-full">
+            {auditLoading ? (
+              <>
+                <Clock className="mr-2 h-4 w-4 animate-spin" />
+                Syncing audits…
+              </>
+            ) : (
+              "Run Audit Sync"
+            )}
+          </Button>
+
+          {auditResult && (
+            <Alert variant={auditResult.success ? "default" : "destructive"}>
+              <div className="flex gap-2 items-start">
+                {auditResult.success ? (
+                  <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 mt-0.5" />
+                )}
+                <div className="space-y-1 flex-1">
+                  <AlertDescription className="font-semibold">
+                    {auditResult.message}
+                  </AlertDescription>
+                  {auditResult.webhookRows != null && (
+                    <AlertDescription className="text-xs">
+                      Sheet rows refreshed: {auditResult.webhookRows}
+                    </AlertDescription>
+                  )}
+                  {auditResult.scoresInserted > 0 && (
+                    <AlertDescription className="text-xs">
+                      {auditResult.scoresInserted} audit score rows
+                    </AlertDescription>
+                  )}
+                  {(auditResult.webhookWarnings ?? []).length > 0 && (
+                    <AlertDescription className="text-xs text-yellow-600">
+                      Warnings: {auditResult.webhookWarnings!.join("; ")}
+                    </AlertDescription>
+                  )}
+                  {auditResult.errors.length > 0 && (
+                    <AlertDescription className="text-xs">
+                      {auditResult.errors.length} error(s): {auditResult.errors.join("; ")}
+                    </AlertDescription>
+                  )}
+                </div>
+              </div>
+            </Alert>
+          )}
+
+          {auditError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{auditError}</AlertDescription>
             </Alert>
           )}
         </CardContent>

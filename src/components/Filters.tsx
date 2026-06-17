@@ -30,12 +30,16 @@ export function Filters({
   showFunctionFilter = true,
   showTermFilter = true,
   showDateFilters = true,
+  minDate,
+  maxDate,
 }: {
   value: FilterState;
   onChange: (v: FilterState) => void;
   showFunctionFilter?: boolean;
   showTermFilter?: boolean;
   showDateFilters?: boolean;
+  minDate?: string;
+  maxDate?: string;
 }) {
   const { isLC, isMC, isEFB, profile } = useAuth();
   const [entities, setEntities] = useState<Entity[]>([]);
@@ -85,11 +89,11 @@ export function Filters({
         <>
           <div className="space-y-1">
             <Label className="text-xs">From</Label>
-            <Input type="date" value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} />
+            <Input type="date" min={minDate} max={maxDate} value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">To</Label>
-            <Input type="date" value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} />
+            <Input type="date" min={minDate} max={maxDate} value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} />
           </div>
         </>
       )}
