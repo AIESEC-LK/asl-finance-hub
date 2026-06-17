@@ -13,7 +13,11 @@ npm run lint         # ESLint check
 npm run format       # Prettier format (write)
 ```
 
-No test suite is configured.
+The dev server runs on **http://localhost:8080**. `npm run build` emits `dist/client` (browser bundle) and `dist/server` (SSR worker entry). No test suite is configured.
+
+### Vite config — do not add plugins manually
+
+`vite.config.ts` is a one-liner that calls `@lovable.dev/vite-tanstack-config`. That wrapper already bundles `tanstackStart`, `viteReact`, `tailwindcss`, `tsConfigPaths`, the Cloudflare plugin (build-only), `componentTagger` (dev-only), `VITE_*` env injection, and the `@` path alias. **Re-adding any of these manually will break the build with duplicate plugins.** Pass extra config via `defineConfig({ vite: { ... } })` if needed.
 
 ## Architecture Overview
 
@@ -22,13 +26,14 @@ No test suite is configured.
 ### Tech Stack
 
 - **React 19 + TypeScript** via **Vite** (not Next.js)
-- **TanStack Router** — file-based routing under `src/routes/`
-- **Supabase** — PostgreSQL database with Row-Level Security (RLS) + Auth
+- **TanStack Start** — full-stack React framework (SSR + server functions) with file-based routing under `src/routes/`. The npm package is `@tanstack/react-start`; routing primitives come from `@tanstack/react-router`.
+- **Supabase** — PostgreSQL database with Row-Level Security (RLS) + Auth + Edge Functions
 - **Radix UI + shadcn/ui** — component library under `src/components/ui/`
 - **Recharts** — financial chart visualizations
 - **TailwindCSS v4** — styling with design tokens in `src/styles.css`
-- **Cloudflare Workers** — deployment target (via Wrangler)
 - **Google Sheets API v4** — external data sync
+
+**Deployment:** two targets are configured. `wrangler.jsonc` deploys the SSR app as a **Cloudflare Worker** (`main: @tanstack/react-start/server-entry`). `vercel.json` deploys to **Vercel** as a static SPA (serves `dist/client`, rewrites all routes to `index.html`) — this is the live demo. The Supabase Edge Function (`supabase/functions/`) deploys separately via the Supabase CLI.
 
 ### Role-Based Access Control
 
@@ -40,7 +45,9 @@ Three user roles control data visibility and write access:
 | `mc_user` | All entities; can manage users and roles |
 | `efb_user` | All entities; can write audit scores and monthly review data |
 
-Role booleans (`isLC`, `isMC`, `isEFB`) are available via `useAuth()` from `src/lib/auth.tsx`. RLS enforces this at the database level — the frontend filtering mirrors what the DB already restricts.
+Role booleans (`isLC`, `isMC`, `isEFB`) are available via `useAuth()` from `src/lib/auth.tsx` (which also exposes `user`, `profile`, `roles`, `loading`, `signOut`, `refresh`). RLS enforces this at the database level — the frontend filtering mirrors what the DB already restricts.
+
+RLS is implemented with `SECURITY DEFINER` helper functions (`has_role`, `get_user_entity`, `can_read_entity`) to avoid policy recursion — see the migration in `supabase/migrations/`. The `handle_new_user()` trigger auto-creates a profile on signup and **assigns the very first user the `mc_user` role** (bootstraps the system; no manual admin setup). MC can write all finance tables; EFB can additionally INSERT/UPDATE (but not DELETE) `audit_scores` and `monthly_review`.
 
 ### Data Flow
 
@@ -59,14 +66,21 @@ LC users are locked to their own entity_id.
 MC/EFB users get a dropdown to select any entity.
 ```
 
+**Two Supabase clients:**
+- `src/integrations/supabase/client.ts` — browser client (anon key, RLS enforced). Default for all component/data-layer queries.
+- `src/integrations/supabase/client.server.ts` — server-only admin client using the **service-role key, which bypasses RLS**. Only import in server functions/routes for trusted admin operations; never expose to client code. For user-authenticated server queries use `auth-middleware.ts` instead.
+
 ### Routing
 
-Routes live in `src/routes/` using TanStack Router's file-based convention:
+Routes live in `src/routes/` using the file-based convention:
 
 - `__root.tsx` — HTML shell
+- `index.tsx` — root entry (redirects into the app)
 - `_app.tsx` — AuthProvider + Gate (all authenticated pages nest here)
 - `_app.overview.tsx` — National KPIs dashboard
 - `_app.lc.tsx` — LC dashboard (balance, inflow/outflow, assets/liabilities)
+- `_app.budget.tsx` — Budget vs. actual tracking
+- `_app.performance.tsx` — Performance metrics
 - `_app.audit.tsx` — Quarterly audit scores
 - `_app.review.tsx` — Monthly pass/fail tracker
 - `_app.admin.tsx` — User/role management (MC only)
@@ -86,10 +100,29 @@ Routes live in `src/routes/` using TanStack Router's file-based convention:
 
 ### Function Codes
 
-Financial data is broken down by AIESEC function codes: `iGV`, `oGV`, `iGTa`, `oGTa`, `iGTe`, `oGTe`. These appear throughout the metrics tables and chart components.
+Financial data is broken down by AIESEC function codes, defined as the `FunctionCode` type and `FUNCTION_CODES` array in `src/lib/finance.ts` (with matching `FUNCTION_COLORS`): `iGV`, `iGT`, `oGV`, `oGT`, `ELD`, `EwA`, `Miscellaneous`, `NMF`, `Conference`, `National Conference Delegation`. These appear throughout the metrics tables and chart components — use the exported constants rather than hardcoding the list.
+
+> ⚠️ **Enum drift:** the original migration defined the DB `function_code` enum as only `iGV, iGT, oGV, oGT, ELD, EwA, BD` (7 values). The frontend list above (10 values) is newer. The live Supabase enum must have been altered out-of-band to accept the newer codes; treat `src/lib/finance.ts` as the source of truth for the UI, and verify the live DB enum before relying on the migration file.
+
+### Google Sheets Sync
+
+External financial data flows in from Google Sheets. The Admin page sync (driven by the `useSheetSync` hook, `src/hooks/useSheetSync.ts`) is a **two-step** flow:
+
+1. **Trigger** — POST to the `trigger-sheet-sync` Edge Function, which (after verifying the JWT + `mc_user` role) calls an external AppScript webhook that consolidates the origin sheets into the `MASTER_COMBINED_TALL` master tab. Webhook URL + secret live as server-side Supabase secrets and never reach the browser.
+2. **Pull** — the browser then runs `syncSheetData()` (`src/integrations/googleSheets/sync.ts`), which reads `MASTER_COMBINED_TALL` via the Sheets API, aggregates per `(entity, month)`, and upserts into `monthly_metrics`/`revenue_streams`/`cost_breakdown`.
+
+Supporting files: `client.ts` (Sheets API fetch), `mapper.ts` (`parseRow` → classify GFB codes / extract function code / normalize), `index.ts` (public exports). The Sheets read in step 2 still happens client-side with `VITE_GOOGLE_SHEETS_API_KEY` (exposed in the bundle — a known limitation).
+
+> The root-level `update_mapper.js` / `update_mapper.py` are disposable one-off scripts that rewrote `mapper.ts` during a past migration. They are **not** part of the app or build — ignore them for normal work.
 
 ### Database Tables (Supabase)
 
 `profiles`, `user_roles`, `monthly_metrics`, `revenue_streams`, `cost_breakdown`, `budget_actual`, `audit_scores`, `monthly_review`, `entities`
 
-Schema details and RLS policies are documented in `PROJECT_CONTEXT.md`.
+Full DDL, RLS policies, enums, and triggers are in the single migration under `supabase/migrations/`.
+
+### Documentation files
+
+- **`README.md`** — accurate project overview, setup, and architecture summary.
+- **`PROJECT_CONTEXT.md`** and **`SYSTEM_REPORT.md`** — detailed references for schema, RBAC, the sync pipeline, and feature status, but dated 24 April 2026 and predate the Edge Function / AppScript sync rework, so some "client-side sync" and function-code notes are stale. Trust the code over these where they conflict.
+- **`GOOGLE_SHEETS_SETUP.md`** documents the Sheets API key setup.
