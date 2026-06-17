@@ -16,11 +16,36 @@ import { useAuth } from "@/lib/auth";
 import { fetchEntities, type Entity } from "@/lib/finance";
 import { format, parseISO } from "date-fns";
 import { CheckCircle2, XCircle, Download } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+  ReferenceLine,
+} from "recharts";
 
 export const Route = createFileRoute("/_app/audit")({
   component: AuditPage,
 });
+
+/** Audit term starts July 2025 — the date filter must not go before this. */
+const AUDIT_MIN_DATE = "2025-07-01";
+
+/** Line colors for the per-entity comparison charts (cycled). */
+const ENTITY_COLORS = [
+  "var(--aiesec-blue)",
+  "var(--aiesec-teal)",
+  "var(--aiesec-orange)",
+  "var(--aiesec-red)",
+  "var(--aiesec-purple)",
+  "var(--aiesec-green)",
+  "var(--aiesec-yellow)",
+  "var(--aiesec-gray)",
+];
 
 interface AuditRow {
   entity_id: string;
@@ -44,7 +69,10 @@ function toPct(score: number | null): number | null {
 
 function AuditPage() {
   const { profile, isLC, isMC, isEFB } = useAuth();
-  const [filters, setFilters] = useState<FilterState>(defaultFilters());
+  const [filters, setFilters] = useState<FilterState>({
+    ...defaultFilters(),
+    from: AUDIT_MIN_DATE,
+  });
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
 
@@ -70,8 +98,8 @@ function AuditPage() {
 
   const entityName = (id: string) => entities.find((e) => e.id === id)?.name ?? "—";
 
-  // Pivot the tall rows into an LC × month matrix.
-  const { months, entityRows, get } = useMemo(() => {
+  // Pivot the tall rows into an LC × month matrix + per-entity chart series.
+  const { months, entityRows, get, scoreSeries, qiSeries } = useMemo(() => {
     const monthSet = new Set<string>();
     const byEntity = new Map<string, Map<string, Cell>>();
     rows.forEach((r) => {
@@ -84,7 +112,33 @@ function AuditPage() {
       .map((id) => ({ id, name: entityName(id) }))
       .sort((a, b) => a.name.localeCompare(b.name));
     const get = (eid: string, m: string): Cell | null => byEntity.get(eid)?.get(m) ?? null;
-    return { months, entityRows, get };
+    const label = (m: string) => format(parseISO(m), "MMM yy");
+
+    // One row per month; one keyed column per entity → one Line each.
+    type ChartRow = Record<string, number | string | null>;
+    const scoreSeries: ChartRow[] = months.map((m) => {
+      const row: ChartRow = { label: label(m) };
+      entityRows.forEach((e) => {
+        row[e.name] = toPct(get(e.id, m)?.score ?? null);
+      });
+      return row;
+    });
+    // Quality improvement = month-over-month Δ of score (derived, not stored).
+    const qiSeries: ChartRow[] = months.map((m, i) => {
+      const row: ChartRow = { label: label(m) };
+      entityRows.forEach((e) => {
+        if (i === 0) {
+          row[e.name] = null;
+          return;
+        }
+        const cur = toPct(get(e.id, m)?.score ?? null);
+        const prev = toPct(get(e.id, months[i - 1])?.score ?? null);
+        row[e.name] = cur !== null && prev !== null ? Math.round(cur - prev) : null;
+      });
+      return row;
+    });
+
+    return { months, entityRows, get, scoreSeries, qiSeries };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, entities]);
 
@@ -124,7 +178,7 @@ function AuditPage() {
           <Download className="mr-2 h-4 w-4" /> Export CSV
         </Button>
       </div>
-      <Filters value={filters} onChange={setFilters} />
+      <Filters value={filters} onChange={setFilters} minDate={AUDIT_MIN_DATE} />
 
       {empty ? (
         <Card>
@@ -152,60 +206,68 @@ function AuditPage() {
             }}
           />
 
-          {/* ── Audit Scores ── */}
-          <AuditMatrix
-            title="Audit Scores"
-            months={months}
-            entityRows={entityRows}
-            renderCell={(eid, month) => {
-              const pct = toPct(get(eid, month)?.score ?? null);
-              if (pct === null) return <span className="text-muted-foreground">—</span>;
-              return (
-                <span
-                  className={cn(
-                    "font-medium tabular-nums",
-                    pct >= 90
-                      ? "text-aiesec-green"
-                      : pct >= 70
-                        ? "text-foreground"
-                        : "text-aiesec-red",
-                  )}
-                >
-                  {pct.toFixed(0)}%
-                </span>
-              );
-            }}
-          />
+          {/* ── Audit Scores (trend; one line per LC for comparison) ── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Audit Scores — trend</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[380px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={scoreSeries} margin={{ top: 8, right: 16, bottom: 0, left: -8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                  <Tooltip formatter={(v) => (v == null ? "—" : `${Number(v).toFixed(0)}%`)} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {entityRows.map((e, i) => (
+                    <Line
+                      key={e.id}
+                      type="monotone"
+                      dataKey={e.name}
+                      stroke={ENTITY_COLORS[i % ENTITY_COLORS.length]}
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
 
           {/* ── Quality Improvement (month-over-month Δ of score) ── */}
-          <AuditMatrix
-            title="Quality Improvement"
-            months={months}
-            entityRows={entityRows}
-            renderCell={(eid, month, monthIndex) => {
-              if (monthIndex === 0) return <span className="text-muted-foreground">—</span>;
-              const cur = toPct(get(eid, month)?.score ?? null);
-              const prev = toPct(get(eid, months[monthIndex - 1])?.score ?? null);
-              if (cur === null || prev === null)
-                return <span className="text-muted-foreground">—</span>;
-              const delta = cur - prev;
-              return (
-                <span
-                  className={cn(
-                    "font-medium tabular-nums",
-                    delta > 0
-                      ? "text-aiesec-green"
-                      : delta < 0
-                        ? "text-aiesec-red"
-                        : "text-muted-foreground",
-                  )}
-                >
-                  {delta > 0 ? "+" : ""}
-                  {delta.toFixed(0)}%
-                </span>
-              );
-            }}
-          />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Monthly Quality Improvement</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[380px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={qiSeries} margin={{ top: 8, right: 16, bottom: 0, left: -8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+                  <ReferenceLine y={0} stroke="var(--border)" />
+                  <Tooltip
+                    formatter={(v) =>
+                      v == null ? "—" : `${Number(v) > 0 ? "+" : ""}${Number(v).toFixed(0)}%`
+                    }
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {entityRows.map((e, i) => (
+                    <Line
+                      key={e.id}
+                      type="monotone"
+                      dataKey={e.name}
+                      stroke={ENTITY_COLORS[i % ENTITY_COLORS.length]}
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>
