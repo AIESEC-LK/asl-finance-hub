@@ -57,11 +57,20 @@ function doPost(e) {
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
-    var result = syncCombinedTallMasterSheet(
-      params.mode  || "all",
-      params.term  || null,
-      params.month || null
-    );
+    // Route by the `sync` discriminator. A project can have only ONE doPost, so
+    // both syncers share this endpoint. Default = "financial" for back-compat
+    // (the existing Edge Function payload has no `sync` field). The audit builder
+    // lives in master-audit-tall-sync.gs (same project, shared globals).
+    var result;
+    if (params.sync === "audit") {
+      result = syncAuditConsolidationMasterSheet(params.month || null);
+    } else {
+      result = syncCombinedTallMasterSheet(
+        params.mode  || "all",
+        params.term  || null,
+        params.month || null
+      );
+    }
     return ContentService.createTextOutput(
       JSON.stringify({ ok: true, rowsWritten: result.rowsWritten, warnings: result.warnings })
     ).setMimeType(ContentService.MimeType.JSON);

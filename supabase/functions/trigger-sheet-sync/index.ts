@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       secret: Deno.env.get("APPSCRIPT_SECRET")!,
+      sync: body.sync ?? "financial", // "financial" (default) | "audit" — routes doPost in AppScript
       mode: body.mode ?? "all",
       term: body.term ?? null,
       month: body.month ?? null,
