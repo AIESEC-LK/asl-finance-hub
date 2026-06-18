@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { fetchEntities, type Entity } from "@/lib/finance";
 import { format, parseISO } from "date-fns";
-import { CheckCircle2, XCircle, Download } from "lucide-react";
+import { CheckCircle2, XCircle, Download, BarChart2, Table2 } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -75,6 +75,8 @@ function AuditPage() {
   });
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
+  const [scoreTableView, setScoreTableView] = useState(false);
+  const [qiTableView, setQiTableView] = useState(false);
 
   useEffect(() => {
     fetchEntities().then(setEntities);
@@ -178,7 +180,7 @@ function AuditPage() {
           <Download className="mr-2 h-4 w-4" /> Export CSV
         </Button>
       </div>
-      <Filters value={filters} onChange={setFilters} minDate={AUDIT_MIN_DATE} />
+      <Filters value={filters} onChange={setFilters} minDate={AUDIT_MIN_DATE} showFunctionFilter={false} showTermFilter={false} />
 
       {empty ? (
         <Card>
@@ -208,65 +210,114 @@ function AuditPage() {
 
           {/* ── Audit Scores (trend; one line per LC for comparison) ── */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Audit Scores — trend</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setScoreTableView((v) => !v)}>
+                {scoreTableView ? <><BarChart2 className="mr-1.5 h-3.5 w-3.5" />Chart</> : <><Table2 className="mr-1.5 h-3.5 w-3.5" />Table</>}
+              </Button>
             </CardHeader>
-            <CardContent className="h-[380px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={scoreSeries} margin={{ top: 8, right: 16, bottom: 0, left: -8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                  <Tooltip formatter={(v) => (v == null ? "—" : `${Number(v).toFixed(0)}%`)} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {entityRows.map((e, i) => (
-                    <Line
-                      key={e.id}
-                      type="monotone"
-                      dataKey={e.name}
-                      stroke={ENTITY_COLORS[i % ENTITY_COLORS.length]}
-                      strokeWidth={2}
-                      dot={false}
-                      connectNulls
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
+            {scoreTableView ? (
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="sticky left-0 z-10 bg-card">LC</TableHead>
+                        {months.map((m) => (
+                          <TableHead key={m} className="whitespace-nowrap text-center">{format(parseISO(m), "MMM yyyy")}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {entityRows.map((e) => (
+                        <TableRow key={e.id}>
+                          <TableCell className="sticky left-0 z-10 bg-card font-medium">{e.name}</TableCell>
+                          {months.map((m) => {
+                            const v = toPct(get(e.id, m)?.score ?? null);
+                            return <TableCell key={m} className="text-center tabular-nums">{v !== null ? `${v.toFixed(1)}%` : <span className="text-muted-foreground">—</span>}</TableCell>;
+                          })}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            ) : (
+              <CardContent className="h-[380px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={scoreSeries} margin={{ top: 8, right: 16, bottom: 0, left: -8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                    <Tooltip wrapperStyle={{ zIndex: 50 }} formatter={(v) => (v == null ? "—" : `${Number(v).toFixed(0)}%`)} />
+                    <Legend verticalAlign="top" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} />
+                    {entityRows.map((e, i) => (
+                      <Line key={e.id} type="monotone" dataKey={e.name} stroke={ENTITY_COLORS[i % ENTITY_COLORS.length]} strokeWidth={2} dot={false} connectNulls />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            )}
           </Card>
 
           {/* ── Quality Improvement (month-over-month Δ of score) ── */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Monthly Quality Improvement</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setQiTableView((v) => !v)}>
+                {qiTableView ? <><BarChart2 className="mr-1.5 h-3.5 w-3.5" />Chart</> : <><Table2 className="mr-1.5 h-3.5 w-3.5" />Table</>}
+              </Button>
             </CardHeader>
-            <CardContent className="h-[380px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={qiSeries} margin={{ top: 8, right: 16, bottom: 0, left: -8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
-                  <ReferenceLine y={0} stroke="var(--border)" />
-                  <Tooltip
-                    formatter={(v) =>
-                      v == null ? "—" : `${Number(v) > 0 ? "+" : ""}${Number(v).toFixed(0)}%`
-                    }
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {entityRows.map((e, i) => (
-                    <Line
-                      key={e.id}
-                      type="monotone"
-                      dataKey={e.name}
-                      stroke={ENTITY_COLORS[i % ENTITY_COLORS.length]}
-                      strokeWidth={2}
-                      dot={false}
-                      connectNulls
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
+            {qiTableView ? (
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="sticky left-0 z-10 bg-card">LC</TableHead>
+                        {months.map((m) => (
+                          <TableHead key={m} className="whitespace-nowrap text-center">{format(parseISO(m), "MMM yyyy")}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {entityRows.map((e) => (
+                        <TableRow key={e.id}>
+                          <TableCell className="sticky left-0 z-10 bg-card font-medium">{e.name}</TableCell>
+                          {months.map((m, i) => {
+                            if (i === 0) return <TableCell key={m} className="text-center text-muted-foreground">—</TableCell>;
+                            const cur = toPct(get(e.id, m)?.score ?? null);
+                            const prev = toPct(get(e.id, months[i - 1])?.score ?? null);
+                            const delta = cur !== null && prev !== null ? Math.round(cur - prev) : null;
+                            return (
+                              <TableCell key={m} className={`text-center tabular-nums font-medium ${delta === null ? "" : delta > 0 ? "text-aiesec-green" : delta < 0 ? "text-aiesec-red" : ""}`}>
+                                {delta !== null ? `${delta > 0 ? "+" : ""}${delta}%` : <span className="text-muted-foreground">—</span>}
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            ) : (
+              <CardContent className="h-[380px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={qiSeries} margin={{ top: 8, right: 16, bottom: 0, left: -8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+                    <ReferenceLine y={0} stroke="var(--border)" />
+                    <Tooltip wrapperStyle={{ zIndex: 50 }} formatter={(v) => v == null ? "—" : `${Number(v) > 0 ? "+" : ""}${Number(v).toFixed(0)}%`} />
+                    <Legend verticalAlign="top" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} />
+                    {entityRows.map((e, i) => (
+                      <Line key={e.id} type="monotone" dataKey={e.name} stroke={ENTITY_COLORS[i % ENTITY_COLORS.length]} strokeWidth={2} dot={false} connectNulls />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            )}
           </Card>
         </>
       )}

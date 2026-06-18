@@ -389,6 +389,3 @@ Then **Admin → Run Audit Sync** runs the whole chain and the EFB Audit tab pop
 | **Audit — client pull → `audit_scores`** | [src/integrations/googleSheets/auditSync.ts](../../src/integrations/googleSheets/auditSync.ts)         |
 | **Audit — orchestration hook**           | [src/hooks/useAuditSync.ts](../../src/hooks/useAuditSync.ts)                                           |
 | **Audit — page UI (matrix + charts)**    | [src/routes/\_app.audit.tsx](../../src/routes/_app.audit.tsx)                                          |
-
-</content>
-</invoke>
