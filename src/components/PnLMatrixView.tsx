@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Download, X, Plus, Filter, Loader2, Pin, ChevronRight } from "lucide-react";
 import { fmtCurrency, fetchEntities, formatEntityName, type Entity } from "@/lib/finance";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 
 interface PnLMatrixViewProps {
   configs: any[];
@@ -49,6 +50,9 @@ const ROW_LABELS = [
 ];
 
 export function PnLMatrixView({ configs, onAddConfig, onRemoveConfig, onEditConfig, onUpdateConfig, onScrollIndexChange }: PnLMatrixViewProps) {
+  const { profile, isLC, isMC, isEFB } = useAuth();
+  const lockEntity = isLC && !isMC && !isEFB;
+
   const [loading, setLoading] = useState(false);
   const [pinnedConfigIds, setPinnedConfigIds] = useState<string[]>([]);
   const [rawData, setRawData] = useState<Record<string, { configHash: string, revenue: any[], costs: any[] }>>({});
@@ -135,11 +139,16 @@ export function PnLMatrixView({ configs, onAddConfig, onRemoveConfig, onEditConf
 
       await Promise.all(
         configs.map(async (config) => {
-          const configHash = `${config.entity}-${config.from}-${config.to}-${config.function}`;
+          let effectiveEntityId = config.entity;
+          if (lockEntity) {
+            effectiveEntityId = profile?.entity_id;
+          }
+
+          const configHash = `${effectiveEntityId}-${config.from}-${config.to}-${config.function}`;
           if (newRawData[config.id] && newRawData[config.id].configHash === configHash) return; // Already fetched
 
-          const entityIds = config.entity && config.entity !== "Select LC" && config.entity !== "all" 
-            ? [config.entity] // config.entity is actually the entity_id (UUID)
+          const entityIds = effectiveEntityId && effectiveEntityId !== "Select LC" && effectiveEntityId !== "all" 
+            ? [effectiveEntityId] // effectiveEntityId is actually the entity_id (UUID)
             : undefined;
 
           // Fetch revenue
@@ -267,7 +276,11 @@ export function PnLMatrixView({ configs, onAddConfig, onRemoveConfig, onEditConf
 
   const handleExportCSV = useCallback(() => {
     const headers = ["Metric", ...configs.map(c => {
-      const ent = c.entity && c.entity !== "Select LC" && c.entity !== "all" ? (entities.find(e => e.id === c.entity)?.name || c.entity) : "All Entities";
+      let effectiveEntityId = c.entity;
+      if (lockEntity) {
+        effectiveEntityId = profile?.entity_id;
+      }
+      const ent = effectiveEntityId && effectiveEntityId !== "Select LC" && effectiveEntityId !== "all" ? (entities.find(e => e.id === effectiveEntityId)?.name || effectiveEntityId) : "All Entities";
       const dateRange = c.term || "All Dates";
       return `"${ent} (${dateRange})"`;
     })];
@@ -347,18 +360,27 @@ export function PnLMatrixView({ configs, onAddConfig, onRemoveConfig, onEditConf
                       <div className="flex items-start justify-between">
                         <div className="flex-1 mr-2 text-left">
                           <select
-                            className="text-sm font-semibold bg-transparent border-b border-gray-300 hover:border-slate-400 focus:outline-none focus:border-blue-500 py-1 w-full text-slate-800 cursor-pointer appearance-none text-left"
+                            className="text-sm font-semibold bg-transparent border-b border-gray-300 hover:border-slate-400 focus:outline-none focus:border-blue-500 py-1 w-full text-slate-800 cursor-pointer appearance-none text-left disabled:opacity-100 disabled:cursor-default"
                             dir="ltr"
-                            value={config.entity && config.entity !== "Select LC" && config.entity !== "all" ? config.entity : "all"}
+                            value={lockEntity ? profile?.entity_id || "" : (config.entity && config.entity !== "Select LC" && config.entity !== "all" ? config.entity : "all")}
                             onChange={(e) => {
                               const val = e.target.value;
                               onUpdateConfig(config.id, { entity: val === 'all' ? "Select LC" : val });
                             }}
+                            disabled={lockEntity}
                           >
-                            <option value="all">All Entities</option>
-                            {entities.map(e => (
-                              <option key={e.id} value={e.id}>{formatEntityName(e.name)}</option>
-                            ))}
+                            {lockEntity ? (
+                              <option value={profile?.entity_id || ""}>
+                                {entities.find(e => e.id === profile?.entity_id)?.name ? formatEntityName(entities.find(e => e.id === profile?.entity_id)!.name) : "Your LC"}
+                              </option>
+                            ) : (
+                              <>
+                                <option value="all">All Entities</option>
+                                {entities.map(e => (
+                                  <option key={e.id} value={e.id}>{formatEntityName(e.name)}</option>
+                                ))}
+                              </>
+                            )}
                           </select>
                         </div>
                         <div className={`flex items-center gap-1 transition-opacity shrink-0 ${isPinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>

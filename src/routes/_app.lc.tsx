@@ -608,6 +608,9 @@ function DashboardSplit({ config, onUpdate, onRemove, isSplit, onMove, isFirst, 
 }
 
 function LCDashboard() {
+  const { profile, isLC, isMC, isEFB } = useAuth();
+  const lockEntity = isLC && !isMC && !isEFB;
+
   const [viewMode, setViewMode] = useState<'charts' | 'pnl'>('charts');
   const [activeMatrixIndex, setActiveMatrixIndex] = useState(0);
   const [pinnedViewId, setPinnedViewId] = useState<string | null>(null);
@@ -624,7 +627,7 @@ function LCDashboard() {
     return [
       {
         id: "1",
-        entity: "Select LC",
+        entity: lockEntity && profile?.entity_id ? profile.entity_id : "Select LC",
         term: "25-26",
         function: "all",
         from: defaultF.from,
@@ -685,7 +688,7 @@ function LCDashboard() {
       ...prev,
       {
         id: newId,
-        entity: "Select LC",
+        entity: lockEntity && profile?.entity_id ? profile.entity_id : "Select LC",
         term: "25-26",
         function: "all",
         from: defaultF.from,
