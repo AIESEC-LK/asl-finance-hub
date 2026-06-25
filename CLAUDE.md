@@ -13,11 +13,13 @@ npm run lint         # ESLint check
 npm run format       # Prettier format (write)
 ```
 
-The dev server runs on **http://localhost:8080**. `npm run build` emits `dist/client` (browser bundle) and `dist/server` (SSR worker entry). No test suite is configured.
+The dev server runs on **http://localhost:8080**. `npm run build` now builds a **static SPA**: it emits `dist/client` with the SPA shell `dist/client/_shell.html` (no `dist/server` SSR worker — see Vite config below). No test suite is configured.
 
 ### Vite config — do not add plugins manually
 
-`vite.config.ts` is a one-liner that calls `@lovable.dev/vite-tanstack-config`. That wrapper already bundles `tanstackStart`, `viteReact`, `tailwindcss`, `tsConfigPaths`, the Cloudflare plugin (build-only), `componentTagger` (dev-only), `VITE_*` env injection, and the `@` path alias. **Re-adding any of these manually will break the build with duplicate plugins.** Pass extra config via `defineConfig({ vite: { ... } })` if needed.
+`vite.config.ts` calls `@lovable.dev/vite-tanstack-config`. That wrapper already bundles `tanstackStart`, `viteReact`, `tailwindcss`, `tsConfigPaths`, the Cloudflare plugin (build-only), `componentTagger` (dev-only), `VITE_*` env injection, and the `@` path alias. **Re-adding any of these manually will break the build with duplicate plugins.** Pass extra config via `defineConfig({ vite: { ... } })` if needed.
+
+The config currently passes two overrides to switch from the SSR-worker build to a static SPA for the Docker/Nginx deployment: `cloudflare: false` (disables the worker output) and `tanstackStart: { spa: { enabled: true } }` (emits the `_shell.html` shell). `wrangler.jsonc` and `vercel.json` still exist but no longer match the active build shape — the live target is now the Azure VM (see Deployment).
 
 ## Architecture Overview
 
@@ -33,7 +35,21 @@ The dev server runs on **http://localhost:8080**. `npm run build` emits `dist/cl
 - **TailwindCSS v4** — styling with design tokens in `src/styles.css`
 - **Google Sheets API v4** — external data sync
 
-**Deployment:** two targets are configured. `wrangler.jsonc` deploys the SSR app as a **Cloudflare Worker** (`main: @tanstack/react-start/server-entry`). `vercel.json` deploys to **Vercel** as a static SPA (serves `dist/client`, rewrites all routes to `index.html`) — this is the live demo. The Supabase Edge Function (`supabase/functions/`) deploys separately via the Supabase CLI.
+**Deployment:** the **live target is an Azure VM** running the app as a Docker container behind Nginx, deployed by GitHub Actions (see CI/CD below). The legacy `wrangler.jsonc` (Cloudflare Worker) and `vercel.json` (Vercel static SPA) configs are still in the repo but are not the active pipeline. The Supabase Edge Function (`supabase/functions/`) deploys separately via the Supabase CLI (`npm run deploy:fn`).
+
+### CI/CD (GitHub Actions + Docker → Azure VM)
+
+Workflows live in `.github/workflows/`:
+
+- **`deploy.yaml`** — on push to `main` (or manual dispatch): builds the Docker image, pushes it to Docker Hub as `…/asldevteam:finance`, then SSHes into the Azure VM and runs `deploy-finance.sh` (prod, host port **8000**).
+- **`test_deploy.yaml`** — identical flow on push to `test`, tag `…/asldevteam:finance-test`, host port **8001**.
+- **`pull_request_test.yaml`** — on PRs (to `master`/`test`): builds the image and smoke-runs the container (no push, no deploy). Note the branch filter here still says `master` while the deploy workflow targets `main`.
+
+Build/runtime pieces:
+
+- **`Dockerfile`** — multi-stage: Node 22 Alpine builds the Vite SPA, then `nginx:alpine` serves `dist/client`. `VITE_*` values are required **at build time** (Vite inlines them) and arrive via a BuildKit **secret mount** (a `.env.production.local` file) so they never persist in an image layer. The CI composes that env file from GitHub Secrets. The build fails hard if `dist/client/_shell.html` is missing.
+- **`nginx.conf`** — serves the SPA with `_shell.html` as the fallback for unmatched routes, long-cache `/assets/`, and a `/health` endpoint returning `200 ok`.
+- **`deploy-finance.sh`** — runs on the VM. Does a **blue-green swap**: pulls the new image, starts it on a temp port, polls `/health`, and only then renames the old `*-current` container to `*-old` and promotes the new one to the production port — with rollback if the health check fails. Driven by env vars `APP`, `TAG`, `HOSTPORT`, `TEMP_PORT`, `CONTAINERPORT` exported by the workflow.
 
 ### Role-Based Access Control
 
