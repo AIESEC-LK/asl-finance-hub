@@ -101,6 +101,16 @@ Deno.serve(async (req) => {
     });
   }
 
+  const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
+  const roleList = (roles ?? []).map((r: { role: string }) => r.role);
+  const canRead = roleList.includes("mc_user") || roleList.includes("efb_user");
+  if (!canRead) {
+    return new Response(JSON.stringify({ ok: false, error: "Forbidden — MC or EFB role required" }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const saKey = Deno.env.get("GOOGLE_SA_KEY");
     if (!saKey) throw new Error("GOOGLE_SA_KEY secret not configured");
