@@ -110,9 +110,9 @@ export function formatEntityName(name: string) {
   }
   
   const map: Record<string, string> = {
-    "Colombo North": "C. North",
-    "Colombo South": "C. South",
-    "Colombo Central": "C. Central"
+    "Colombo North": "CN",
+    "Colombo South": "CS",
+    "Colombo Central": "CC"
   };
   return map[name] || name;
 }
