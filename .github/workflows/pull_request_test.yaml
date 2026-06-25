@@ -2,7 +2,7 @@ name: Test Pull Request
 
 on:
   pull_request:
-    branches: ["master", "test"]
+    branches: ["main", "test"]
 
   workflow_dispatch:
 
