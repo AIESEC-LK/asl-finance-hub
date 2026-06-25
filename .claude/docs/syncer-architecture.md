@@ -354,7 +354,7 @@ File: [src/integrations/googleSheets/auditSync.ts](../../src/integrations/google
   required before the audit sync can go live — see §4 issue 1.
 - **`AUDIT_LC_TO_CODE`** normalizes the inconsistent audit labels (some are entity _codes_
   `CC/CN/CS/NSBM/SLIIT/NIBM/USJ`, some are _names_ `Kandy/Rajarata/Ruhuna` whose codes differ
-  `KDY/RAJ/RUH`) → entity `code` → `entity_id`. The dashboard covers **10 LCs (no Jaffna)**.
+  `KDY/RAJ/RUH`) → entity `code` → `entity_id`. The dashboard covers **10 LCs**.
 - Stores values **as-is**: `score` = fraction, `remarks` = Pass/Fail, `max_score` = `null`,
   `quarter` = `null`. QI not stored.
 - **Delete-then-insert per `(entity_id, period_month)`** — `audit_scores` has no unique

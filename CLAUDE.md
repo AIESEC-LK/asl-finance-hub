@@ -166,9 +166,9 @@ npx supabase db pull
 
 `db pull` spins up a temporary local shadow DB, diffs it against the live DB, and writes the result to a new `.sql` file in `supabase/migrations/`. It **does not modify your live schema**.
 
-**Entities are plain DB rows, not enums.** To add or remove an LC (e.g. Jaffna/JFN), run a SQL statement in the Supabase SQL editor:
+**Entities are plain DB rows, not enums.** To add or remove an LC, run a SQL statement in the Supabase SQL editor:
 ```sql
-DELETE FROM public.entities WHERE code = 'JFN';
+DELETE FROM public.entities WHERE code = 'XYZ';
 ```
 Also remove the corresponding seed line from the migration file to prevent it reappearing on a DB reset.
 

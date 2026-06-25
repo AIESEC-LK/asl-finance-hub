@@ -226,7 +226,7 @@ erDiagram
 
 | Table | Records | Purpose |
 |-------|---------|---------|
-| `entities` | 12 | All LCs (CC, CN, CS, Kandy, Jaffna, USJ, NSBM, Ruhuna, Rajarata, SLIIT, NIBM, Wayamba) |
+| `entities` | 11 | All LCs (CC, CN, CS, Kandy, USJ, NSBM, Ruhuna, Rajarata, SLIIT, NIBM, Wayamba) |
 | `profiles` | 1+ | User profiles linked to auth.users |
 | `user_roles` | 1+ | RBAC role assignments (lc_user, mc_user, efb_user) |
 | `monthly_metrics` | ~245 | Aggregated monthly financial KPIs per entity |
