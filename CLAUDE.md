@@ -13,11 +13,13 @@ npm run lint         # ESLint check
 npm run format       # Prettier format (write)
 ```
 
-The dev server runs on **http://localhost:8080**. `npm run build` emits `dist/client` (browser bundle) and `dist/server` (SSR worker entry). No test suite is configured.
+The dev server runs on **http://localhost:8080**. `npm run build` now builds a **static SPA**: it emits `dist/client` with the SPA shell `dist/client/_shell.html` (no `dist/server` SSR worker — see Vite config below). No test suite is configured.
 
 ### Vite config — do not add plugins manually
 
-`vite.config.ts` is a one-liner that calls `@lovable.dev/vite-tanstack-config`. That wrapper already bundles `tanstackStart`, `viteReact`, `tailwindcss`, `tsConfigPaths`, the Cloudflare plugin (build-only), `componentTagger` (dev-only), `VITE_*` env injection, and the `@` path alias. **Re-adding any of these manually will break the build with duplicate plugins.** Pass extra config via `defineConfig({ vite: { ... } })` if needed.
+`vite.config.ts` calls `@lovable.dev/vite-tanstack-config`. That wrapper already bundles `tanstackStart`, `viteReact`, `tailwindcss`, `tsConfigPaths`, the Cloudflare plugin (build-only), `componentTagger` (dev-only), `VITE_*` env injection, and the `@` path alias. **Re-adding any of these manually will break the build with duplicate plugins.** Pass extra config via `defineConfig({ vite: { ... } })` if needed.
+
+The config currently passes two overrides to switch from the SSR-worker build to a static SPA for the Docker/Nginx deployment: `cloudflare: false` (disables the worker output) and `tanstackStart: { spa: { enabled: true } }` (emits the `_shell.html` shell). `wrangler.jsonc` and `vercel.json` still exist but no longer match the active build shape — the live target is now the Azure VM (see Deployment).
 
 ## Architecture Overview
 
@@ -33,7 +35,21 @@ The dev server runs on **http://localhost:8080**. `npm run build` emits `dist/cl
 - **TailwindCSS v4** — styling with design tokens in `src/styles.css`
 - **Google Sheets API v4** — external data sync
 
-**Deployment:** two targets are configured. `wrangler.jsonc` deploys the SSR app as a **Cloudflare Worker** (`main: @tanstack/react-start/server-entry`). `vercel.json` deploys to **Vercel** as a static SPA (serves `dist/client`, rewrites all routes to `index.html`) — this is the live demo. The Supabase Edge Function (`supabase/functions/`) deploys separately via the Supabase CLI.
+**Deployment:** the **live target is an Azure VM** running the app as a Docker container behind Nginx, deployed by GitHub Actions (see CI/CD below). The legacy `wrangler.jsonc` (Cloudflare Worker) and `vercel.json` (Vercel static SPA) configs are still in the repo but are not the active pipeline. The Supabase Edge Function (`supabase/functions/`) deploys separately via the Supabase CLI (`npm run deploy:fn`).
+
+### CI/CD (GitHub Actions + Docker → Azure VM)
+
+Workflows live in `.github/workflows/`:
+
+- **`deploy.yaml`** — on push to `main` (or manual dispatch): builds the Docker image, pushes it to Docker Hub as `…/asldevteam:finance`, then SSHes into the Azure VM and runs `deploy-finance.sh` (prod, host port **8000**).
+- **`test_deploy.yaml`** — identical flow on push to `test`, tag `…/asldevteam:finance-test`, host port **8001**.
+- **`pull_request_test.yaml`** — on PRs (to `master`/`test`): builds the image and smoke-runs the container (no push, no deploy). Note the branch filter here still says `master` while the deploy workflow targets `main`.
+
+Build/runtime pieces:
+
+- **`Dockerfile`** — multi-stage: Node 22 Alpine builds the Vite SPA, then `nginx:alpine` serves `dist/client`. `VITE_*` values are required **at build time** (Vite inlines them) and arrive via a BuildKit **secret mount** (a `.env.production.local` file) so they never persist in an image layer. The CI composes that env file from GitHub Secrets. The build fails hard if `dist/client/_shell.html` is missing.
+- **`nginx.conf`** — serves the SPA with `_shell.html` as the fallback for unmatched routes, long-cache `/assets/`, and a `/health` endpoint returning `200 ok`.
+- **`deploy-finance.sh`** — runs on the VM. Does a **blue-green swap**: pulls the new image, starts it on a temp port, polls `/health`, and only then renames the old `*-current` container to `*-old` and promotes the new one to the production port — with rollback if the health check fails. Driven by env vars `APP`, `TAG`, `HOSTPORT`, `TEMP_PORT`, `CONTAINERPORT` exported by the workflow.
 
 ### Role-Based Access Control
 
@@ -102,7 +118,7 @@ Routes live in `src/routes/` using the file-based convention:
 
 Financial data is broken down by AIESEC function codes, defined as the `FunctionCode` type and `FUNCTION_CODES` array in `src/lib/finance.ts` (with matching `FUNCTION_COLORS`): `iGV`, `iGT`, `oGV`, `oGT`, `ELD`, `EwA`, `Miscellaneous`, `NMF`, `Conference`, `National Conference Delegation`. These appear throughout the metrics tables and chart components — use the exported constants rather than hardcoding the list.
 
-> ⚠️ **Enum drift:** the original migration defined the DB `function_code` enum as only `iGV, iGT, oGV, oGT, ELD, EwA, BD` (7 values). The frontend list above (10 values) is newer. The live Supabase enum must have been altered out-of-band to accept the newer codes; treat `src/lib/finance.ts` as the source of truth for the UI, and verify the live DB enum before relying on the migration file.
+> ⚠️ **Enum drift:** the original migration (`20260424043656_…sql`) defined the DB `function_code` enum as only `iGV, iGT, oGV, oGT, ELD, EwA, BD` (7 values). The frontend list above (10 values) is newer. The live Supabase enum was altered out-of-band; `20260625175845_remote_schema.sql` (pulled 2026-06-25) reflects the live state. Treat `src/lib/finance.ts` as the source of truth for the UI, and use the pulled migration file (not the original) when reading the current DB enum.
 
 ### Google Sheets Sync
 
@@ -121,7 +137,40 @@ Supporting files: `client.ts` (Sheets API fetch), `mapper.ts` (`parseRow` → ex
 
 `profiles`, `user_roles`, `monthly_metrics`, `revenue_streams`, `cost_breakdown`, `budget_actual`, `audit_scores`, `monthly_review`, `entities`
 
-Full DDL, RLS policies, enums, and triggers are in the single migration under `supabase/migrations/`.
+Full DDL, RLS policies, enums, and triggers are in `supabase/migrations/`.
+
+### Migration Files and Schema Drift
+
+There are currently **two migration files**:
+
+- `20260424043656_4c7a59ec-…sql` — the original hand-written migration. Contains the initial schema, all tables, RLS policies, triggers, and seed data (entity rows including the initial 11 LCs).
+- `20260625175845_remote_schema.sql` — generated by `npx supabase db pull` on 2026-06-25. Captures the actual live DB state including all out-of-band changes made since the original migration.
+
+**Known drift between the original migration and the live DB:**
+- `function_code` enum: original file has 7 values (`iGV, iGT, oGV, oGT, ELD, EwA, BD`); live DB was altered out-of-band and accepts 10 values (matching `src/lib/finance.ts`).
+- The pulled migration file (`20260625175845_remote_schema.sql`) reflects the live state — trust it over the original for the current schema.
+
+**How to re-sync local migrations with the live DB (read-only, safe):**
+
+If the CLI complains that "remote migration history does not match local files", run these two commands in order:
+
+```bash
+# 1. Tell the CLI that the original migration is already applied (only updates the tracking table — does NOT touch live schema)
+npx supabase migration repair --status applied 20260424043656
+
+# 2. Pull live schema into a new local migration file
+npx supabase db pull
+# When prompted "Update remote migration history table? [Y/n]" → type Y
+# This marks the new pulled file as applied in the tracking table so future CLI commands stay in sync.
+```
+
+`db pull` spins up a temporary local shadow DB, diffs it against the live DB, and writes the result to a new `.sql` file in `supabase/migrations/`. It **does not modify your live schema**.
+
+**Entities are plain DB rows, not enums.** To add or remove an LC (e.g. Jaffna/JFN), run a SQL statement in the Supabase SQL editor:
+```sql
+DELETE FROM public.entities WHERE code = 'JFN';
+```
+Also remove the corresponding seed line from the migration file to prevent it reappearing on a DB reset.
 
 ### Documentation files
 
@@ -129,3 +178,4 @@ Full DDL, RLS policies, enums, and triggers are in the single migration under `s
 - **[`.claude/docs/syncer-architecture.md`](.claude/docs/syncer-architecture.md)** — canonical, code-verified reference for the Google Sheets → Supabase sync pipeline. Trust this over the older docs for anything sync-related.
 - **`PROJECT_CONTEXT.md`** and **`SYSTEM_REPORT.md`** — detailed references for schema, RBAC, the sync pipeline, and feature status. Originally dated 24 April 2026; their **sync, function-code, and architecture sections were reconciled on 2026-06-17** to match the current Edge Function / AppScript flow. Other sections may still lag — trust the code (and the syncer doc) where they conflict.
 - **`GOOGLE_SHEETS_SETUP.md`** documents the Sheets API key setup (the `VITE_GOOGLE_SHEETS_API_KEY` used for the step-2 read).
+- **`supabase/migrations/20260625175845_remote_schema.sql`** — live DB schema pulled on 2026-06-25 via `db pull`. More accurate than the original migration for the current live state. See the "Migration Files and Schema Drift" section above for the full workflow.
