@@ -380,14 +380,14 @@ function DashboardSplit({
   // petty_cash (8502) and reserves (8602) are stored as separate DB columns to allow precise numerator isolation.
   // Total Assets on the frontend sums all five buckets (assets + bank_balance + receivables + petty_cash + reserves)
   // without any data duplication in the backend.
-  // Denominator: the 12 calendar months BEFORE the month filters.to falls in, excluding
-  // the anchor month itself (Dec anchor → Dec-prev-year … Nov). Rows are summed directly,
+  // Denominator: the trailing 12 calendar months INCLUDING the month filters.to falls in
+  // (Apr anchor → prev-year-May … Apr). Rows are summed directly,
   // so "all entities" sums total_cost across every entity per month automatically. ÷12.
   // Numerator: the anchor month's balance (summed across entities for "all").
   const mocr = useMemo(() => {
     if (!mocrMetrics.length) return null;
     const anchorMonth = startOfMonth(parseISO(filters.to));
-    const windowStart = startOfMonth(subMonths(anchorMonth, 12));
+    const windowStart = startOfMonth(subMonths(anchorMonth, 11));
     const anchorKey = format(anchorMonth, "yyyy-MM");
 
     let totalCost12m = 0;
@@ -395,7 +395,7 @@ function DashboardSplit({
     let hasAnchorRow = false;
     for (const m of mocrMetrics) {
       const mMonth = startOfMonth(parseISO(m.period_month));
-      if (mMonth >= windowStart && mMonth < anchorMonth) {
+      if (mMonth >= windowStart && mMonth <= anchorMonth) {
         totalCost12m += m.total_cost ?? 0;
       }
       if (format(mMonth, "yyyy-MM") === anchorKey) {
