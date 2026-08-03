@@ -10,7 +10,8 @@
 // Flow:
 //   1. Verify caller has a valid Supabase JWT
 //   2. Confirm caller has mc_user role
-//   3. Generate a random temp password
+//   3. Read { user_id }; guard against self-reset (admins change their own
+//      password via the explicit /account UI, not this admin-only reset)
 //   4. Service-role client: auth.admin.updateUserById(user_id, { password }),
 //      then set profiles.must_change_password = true so the user is routed
 //      to /account on next login until they set their own password
@@ -77,7 +78,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  // ── 3. Read target user_id ────────────────────────────────────────────────
+  // ── 3. Read target user_id; guard against self-reset ──────────────────────
   const body = await req.json();
   const targetUserId = body.user_id as string | undefined;
   if (!targetUserId) {
@@ -85,6 +86,15 @@ Deno.serve(async (req) => {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  }
+  if (targetUserId === user.id) {
+    return new Response(
+      JSON.stringify({ ok: false, error: "Cannot reset your own password here" }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 
   // ── 4. Service-role client: reset the password ────────────────────────────

@@ -393,15 +393,17 @@ function AdminPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8"
-                          onClick={() => setPendingAction({ type: "reset", user: u })}
-                        >
-                          <KeyRound className="mr-1 h-3 w-3" />
-                          Reset password
-                        </Button>
+                        {u.user_id !== user?.id && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8"
+                            onClick={() => setPendingAction({ type: "reset", user: u })}
+                          >
+                            <KeyRound className="mr-1 h-3 w-3" />
+                            Reset password
+                          </Button>
+                        )}
                         {u.disabled ? (
                           <>
                             <Button
