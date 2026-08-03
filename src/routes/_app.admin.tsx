@@ -18,11 +18,30 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { fetchEntities, type Entity } from "@/lib/finance";
 import { useAuth, type AppRole } from "@/lib/auth";
 import { useSheetSync, type SyncMode } from "@/hooks/useSheetSync";
 import { useAuditSync } from "@/hooks/useAuditSync";
-import { AlertCircle, CheckCircle, Clock } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, KeyRound, Trash2, Copy } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 
@@ -60,6 +79,14 @@ function AdminPage() {
   const [entities, setEntities] = useState<Entity[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
+  const [editingName, setEditingName] = useState<{ uid: string; value: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [resettingUid, setResettingUid] = useState<string | null>(null);
+  const [tempPasswordFor, setTempPasswordFor] = useState<{
+    name: string;
+    password: string;
+  } | null>(null);
 
   const load = async () => {
     setPageLoading(true);
@@ -115,6 +142,64 @@ function AdminPage() {
     }
   };
 
+  const saveName = async (uid: string, full_name: string) => {
+    const { error } = await supabase.from("profiles").update({ full_name }).eq("user_id", uid);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Name updated");
+      setEditingName(null);
+      load();
+    }
+  };
+
+  const callAdminFn = async (fnName: string, payload: Record<string, unknown>) => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) throw new Error("Not authenticated");
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fnName}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json()) as { ok: boolean; error?: string; [k: string]: unknown };
+    if (!data.ok) throw new Error(data.error ?? "Request failed");
+    return data;
+  };
+
+  const resetPassword = async (u: UserRow) => {
+    setResettingUid(u.user_id);
+    try {
+      const data = await callAdminFn("admin-reset-password", { user_id: u.user_id });
+      setTempPasswordFor({
+        name: u.full_name ?? u.email ?? "user",
+        password: data.tempPassword as string,
+      });
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Could not reset password");
+    } finally {
+      setResettingUid(null);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await callAdminFn("admin-delete-user", { user_id: deleteTarget.user_id });
+      toast.success("User deleted");
+      setDeleteTarget(null);
+      load();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Could not delete user");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -146,7 +231,43 @@ function AdminPage() {
                 {users.map((u) => (
                   <TableRow key={u.user_id}>
                     <TableCell>
-                      {u.full_name ?? "—"}
+                      {editingName?.uid === u.user_id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            className="h-8 w-36"
+                            value={editingName.value}
+                            onChange={(e) =>
+                              setEditingName({ uid: u.user_id, value: e.target.value })
+                            }
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            className="h-8"
+                            onClick={() => saveName(u.user_id, editingName.value)}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8"
+                            onClick={() => setEditingName(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-left hover:underline"
+                          onClick={() =>
+                            setEditingName({ uid: u.user_id, value: u.full_name ?? "" })
+                          }
+                        >
+                          {u.full_name ?? "—"}
+                        </button>
+                      )}
                       {u.user_id === user?.id && (
                         <span className="ml-1 text-xs text-muted-foreground">(you)</span>
                       )}
@@ -185,7 +306,30 @@ function AdminPage() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          onClick={() => resetPassword(u)}
+                          disabled={resettingUid === u.user_id}
+                        >
+                          <KeyRound className="mr-1 h-3 w-3" />
+                          {resettingUid === u.user_id ? "Resetting…" : "Reset password"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(u)}
+                          disabled={u.user_id === user?.id}
+                        >
+                          <Trash2 className="mr-1 h-3 w-3" />
+                          Delete
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -193,6 +337,62 @@ function AdminPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove{" "}
+              <strong>{deleteTarget?.full_name ?? deleteTarget?.email}</strong>&apos;s access. This
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDelete();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!tempPasswordFor} onOpenChange={(open) => !open && setTempPasswordFor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Temporary password for {tempPasswordFor?.name}</DialogTitle>
+            <DialogDescription>
+              Shown once — relay this to the user directly (Slack/WhatsApp/in person). They should
+              log in with it and change it via their Account page.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 rounded-md border bg-muted px-3 py-2 font-mono text-sm">
+            <span className="flex-1 select-all">{tempPasswordFor?.password}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                if (tempPasswordFor) {
+                  navigator.clipboard.writeText(tempPasswordFor.password);
+                  toast.success("Copied to clipboard");
+                }
+              }}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setTempPasswordFor(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
