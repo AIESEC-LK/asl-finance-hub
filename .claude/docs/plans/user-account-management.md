@@ -45,10 +45,10 @@ Scope decisions (confirmed with user):
 - `.claude/docs/plans/user-account-management.md` (this plan, persisted project-side)
 - `src/routes/_app.account.tsx`
 - `supabase/functions/admin-reset-password/index.ts`
-- `supabase/functions/admin-delete-user/index.ts` (Phase 2; superseded by Phase 3, see below)
-- `supabase/migrations/<new>_add_profiles_disabled.sql` (Phase 3)
-- `supabase/functions/admin-deactivate-user/index.ts` (Phase 3)
-- `supabase/functions/admin-reactivate-user/index.ts` (Phase 3)
+- `supabase/functions/admin-delete-user/index.ts` (Phase 2; modified in Phase 3 to require prior deactivation + hard delete, not superseded/removed)
+- `supabase/migrations/20260803000000_add_profile_deactivation_and_forced_password_change.sql` (Phase 3, built)
+- `supabase/functions/admin-deactivate-user/index.ts` (Phase 3, built)
+- `supabase/functions/admin-reactivate-user/index.ts` (Phase 3, built)
 
 ## Files touched (edited)
 - `src/routes/login.tsx` — ~~add "Forgot password?" link~~ **done: replaced with static "contact your admin" text, no email link** (Phase 1, revised)
@@ -178,13 +178,23 @@ alter table public.profiles
 - Reset a test user's password → confirm `must_change_password` gets set → log in as that user with the temp password → confirm they're redirected straight to `/account` regardless of what route they try → change password → confirm the redirect stops happening on subsequent logins.
 - Confirm an admin cannot deactivate their own account, and that self-service profile updates still can't set `disabled`/`must_change_password` directly (e.g. via a raw REST call).
 
-**⏸ STOP — review Phase 3 in the browser (deactivate → login-blocked check → delete-only-when-deactivated check → forced-password-change redirect check) before considering this plan fully wrapped up.**
+**✅ Phase 3 complete (2026-08-03).** Built and deployed:
+- Migration `20260803000000_add_profile_deactivation_and_forced_password_change.sql` — adds `profiles.disabled` + `profiles.must_change_password`, plus a `SECURITY DEFINER` trigger (`protect_privileged_profile_columns`) that pins both columns to their old value for any non-service-role UPDATE (a user can flip `must_change_password` `true → false` themselves, e.g. from `/account`, but never `false → true`, and never touches `disabled`). This replaced the originally-planned "tighten the RLS policy" approach from the 3a sketch above — a trigger, not a policy rewrite.
+- `admin-deactivate-user`, `admin-reactivate-user` — new Edge Functions, deployed. `admin-deactivate-user` has a self-guard (400 on `user_id === caller.id`).
+- `admin-delete-user` — modified to require `profiles.disabled = true` on the target first (400 otherwise), then hard-deletes (`auth.admin.deleteUser(uid)`, no soft-delete flag).
+- `admin-reset-password` — modified to set `must_change_password: true` after the password update, **and** (added later this session, beyond the original 3c/3d sketch) a self-guard rejecting `user_id === caller.id` with a 400 — admins must use `/account` to change their own password, not the admin reset button. Client-side, the "Reset password" button is now fully hidden (not just disabled) on the admin's own row in `_app.admin.tsx`, matching the existing self-hide pattern already used for Deactivate.
+- `_app.admin.tsx` — deactivate/reactivate/delete/reset-password buttons, confirm dialogs, "Show deactivated users" toggle, deactivated-row styling — all built.
+- Forced-redirect-to-`/account` when `must_change_password` is true, plus the `/account` banner and flag-clearing on password change — built.
+- All four functions deployed via `--use-api`; `types.ts` regenerated to match.
+
+**⏸ STOP — full browser walkthrough of Phase 3 (deactivate → login-blocked → delete-only-when-deactivated → forced-password-change redirect → admin-cannot-reset/deactivate-self) not yet explicitly confirmed by the user. Do this before considering the plan fully wrapped up.**
 
 ---
 
 ## Final verification (after all phases approved)
 1. `npm run lint` and `npm run build` to confirm routes compile into `routeTree.gen.ts` correctly (auto-generated, don't hand-edit) and the static SPA build still succeeds.
-2. Re-walk both flows (self change-password + name edit, admin edit/reset-password/delete) end-to-end once more after the full set of changes is in place, to catch any interaction effects (e.g. AppShell nav layout, admin table column widths).
+2. Re-walk both flows (self change-password + name edit, admin edit/reset-password/delete/deactivate/reactivate) end-to-end once more after the full set of changes is in place, to catch any interaction effects (e.g. AppShell nav layout, admin table column widths).
+3. Nothing has been committed yet — the user commits manually; the assistant must never run `git commit`.
 
 ## Deferred (not in this plan)
 - Email-based forgot-password self-service flow — blocked on setting up custom SMTP (Resend/SES/Postmark/SendGrid/Brevo/ZeptoMail) in the Supabase Dashboard. Revisit once that's configured; at that point `resetPasswordForEmail` + a `/reset-password` landing page (already built once, see git history) can be reintroduced with minimal changes.
