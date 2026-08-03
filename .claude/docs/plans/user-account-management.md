@@ -16,13 +16,20 @@ Checked current Supabase docs. On the free tier, **without a custom SMTP provide
 - An MC admin resets a user's password from `/admin` to a temporary value (`supabase.auth.admin.updateUserById(uid, { password })` — service-role only, confirmed via docs this works and requires no confirmation flow).
 - Self-service password change (already-logged-in users, not via a temp password) still requires re-entering the current password, per the original scope decision.
 
-### ⚠️ Revision (2026-08-03, same day): forced "must change password" flow also deferred
+### ~~⚠️ Revision (2026-08-03, same day): forced "must change password" flow also deferred~~ — superseded by Phase 3, now built
+
+Originally deferred here for the reasons below, but **un-deferred later the same day in Phase 3** (see that section): `profiles.must_change_password` was added via migration, `admin-reset-password` sets it `true`, and the `_app` route guard forces a redirect to `/account` until the user changes their password. This section is kept for history only — treat Phase 3 as the current state, not this note.
+
+<details>
+<summary>Original (superseded) reasoning</summary>
 
 Checked docs: **there is no built-in "must change password on next login" flag in Supabase Auth** — it would have to be modeled ourselves (a new `profiles.must_change_password` column + a route-guard redirect). Decided this is more than needed right now: **deferred**, not built.
 
 Simplified replacement: after an admin resets a user's password to a temp value, the user just logs in with it normally and can go to `/account` (Phase 1) whenever they like to set their own password. No forced redirect, no new migration, no new column for this pass.
 
 **If revisited later:** add `profiles.must_change_password boolean not null default false`, set it `true` in `admin-reset-password`, check it in the `_app.tsx` route guard (redirect to `/account` if true and route isn't already `/account`), and clear it in the account page's change-password handler.
+
+</details>
 
 ### Other free-tier facts confirmed (for reference)
 - `supabase.auth.admin.updateUserById` / `deleteUser` — Admin API calls, work on free tier, service-role only, no email involved, no rate limit tied to the email quota.
