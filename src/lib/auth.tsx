@@ -9,6 +9,8 @@ export interface Profile {
   full_name: string | null;
   email: string | null;
   entity_id: string | null;
+  disabled: boolean;
+  must_change_password: boolean;
 }
 
 interface AuthCtx {
@@ -33,7 +35,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUserData = async (uid: string) => {
     const [{ data: prof }, { data: rs }] = await Promise.all([
-      supabase.from("profiles").select("user_id,full_name,email,entity_id").eq("user_id", uid).maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("user_id,full_name,email,entity_id,disabled,must_change_password")
+        .eq("user_id", uid)
+        .maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
     ]);
     setProfile(prof as Profile | null);

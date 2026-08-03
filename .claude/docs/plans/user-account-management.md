@@ -45,16 +45,20 @@ Scope decisions (confirmed with user):
 - `.claude/docs/plans/user-account-management.md` (this plan, persisted project-side)
 - `src/routes/_app.account.tsx`
 - `supabase/functions/admin-reset-password/index.ts`
-- `supabase/functions/admin-delete-user/index.ts`
+- `supabase/functions/admin-delete-user/index.ts` (Phase 2; superseded by Phase 3, see below)
+- `supabase/migrations/<new>_add_profiles_disabled.sql` (Phase 3)
+- `supabase/functions/admin-deactivate-user/index.ts` (Phase 3)
+- `supabase/functions/admin-reactivate-user/index.ts` (Phase 3)
 
 ## Files touched (edited)
 - `src/routes/login.tsx` — ~~add "Forgot password?" link~~ **done: replaced with static "contact your admin" text, no email link** (Phase 1, revised)
-- `src/routes/_app.admin.tsx` — add name edit + reset-password button + delete button/dialog + handlers
+- `src/routes/_app.admin.tsx` — add name edit + reset-password button + delete button/dialog + handlers (Phase 2); replace delete with deactivate/reactivate (Phase 3)
 - `src/components/AppShell.tsx` — add nav link to `/account`
 
 ## Files removed
 - `src/routes/forgot-password.tsx` (deleted — email-based flow deferred)
 - `src/routes/reset-password.tsx` (deleted — email-based flow deferred)
+- `supabase/functions/admin-delete-user/index.ts` (Phase 3 — replaced by deactivate/reactivate, pending explicit go-ahead to remove the deployed function too)
 
 ---
 
@@ -123,11 +127,66 @@ Originally built `forgot-password.tsx` + `reset-password.tsx` using `resetPasswo
 
 ---
 
+## Phase 3: Deactivate/reactivate + gated hard delete + forced password change on reset (2026-08-03)
+
+### Why
+- `admin-delete-user` uses `auth.admin.deleteUser(id, true)` — a **soft delete**. Soft delete does not cascade to `profiles`/`user_roles` (only a hard delete does), so the row keeps showing normally in the `/admin` table even after "deletion," which is confusing and was reported by the user as a bug.
+- **Revised direction (this pass):** delete becomes a genuine **hard delete** (irreversible, matches the "cannot be undone" copy that was already in the UI), but is only reachable once a user has been deactivated first — a deliberate two-step "cool off then remove" flow, not a one-click permanent action. Deactivate/reactivate remains the everyday offboarding/re-onboarding tool; hard delete is for actually purging an account later.
+- Since a migration is happening anyway, also un-defer the "must change password after an admin reset" flow noted in the Phase 1/2 revisions above — it was only deferred because it needed its own column.
+
+### Design
+- **Deactivate/reactivate**: Supabase Auth's native ban mechanism — `auth.admin.updateUserById(uid, { ban_duration: '876000h' })` (~100 years, effectively indefinite) blocks sign-in at the auth layer; `ban_duration: 'none'` lifts it. Enforced server-side by Supabase Auth itself (login fails outright), not just hidden in the UI.
+- The `/admin` table reads only from `profiles`/`user_roles` (anon-key client, RLS-scoped) — no visibility into `auth.users.banned_until` without a new "list users" Edge Function. Instead: add `profiles.disabled boolean not null default false` as the UI-facing mirror of ban state, written only by the admin Edge Functions.
+- **Hard delete gated on deactivation**: `admin-delete-user` (kept, not removed) checks `profiles.disabled` for the target first — if `false`, return a 400 ("Deactivate this user before deleting") instead of proceeding. If `true`, call `auth.admin.deleteUser(uid)` with no soft-delete flag (or explicit `false`) for a real hard delete; `profiles`/`user_roles` rows cascade-delete automatically (`ON DELETE CASCADE`, already confirmed in the original migration).
+- **Forced password change on admin reset**: add `profiles.must_change_password boolean not null default false`. `admin-reset-password` sets it `true` after setting the temp password. The `_app.tsx` route guard (or a check inside `Gate`) redirects to `/account` whenever `profile.must_change_password` is true and the current route isn't already `/account`. The account page's change-password handler clears the flag (`must_change_password: false`) on successful `updateUser({ password })`, alongside the existing reauth step.
+- All three new/changed columns are admin/self-write-scoped, not blanket user-writable — confirm the "Users update own profile basic" RLS policy's `WITH CHECK` doesn't let a user set `disabled` or `must_change_password` on themselves (only `full_name` should be self-editable; the account page's own name-edit call already only touches `full_name`).
+
+### 3a. Migration
+```sql
+alter table public.profiles
+  add column disabled boolean not null default false,
+  add column must_change_password boolean not null default false;
+```
+- Review/tighten the "Users update own profile basic" UPDATE policy so self-service updates can only touch `full_name` (not `disabled`/`must_change_password`) — e.g. a column-scoped policy or an application-level check confirmed safe, whichever the existing policy shape supports.
+
+### 3b. Edge Functions
+- **`admin-deactivate-user`** (new): same auth/authz/self-guard pattern as today's delete function → service-role `updateUserById(uid, { ban_duration: '876000h' })` → `profiles.update({ disabled: true })`. Return `{ ok: true }`.
+- **`admin-reactivate-user`** (new): same auth/authz (no self-guard needed) → `ban_duration: 'none'` → `profiles.update({ disabled: false })`. Return `{ ok: true }`.
+- **`admin-delete-user`** (modified, not removed): keep the existing JWT/role/self-delete checks; add a lookup of the target's `profiles.disabled` — if not `true`, return 400 with a clear message; otherwise call `auth.admin.deleteUser(uid)` (hard delete — omit/ set the soft-delete arg to `false`). Return `{ ok: true }`.
+- **`admin-reset-password`** (modified): after the existing `updateUserById(uid, { password: tempPassword })` call succeeds, also `profiles.update({ must_change_password: true }).eq('user_id', uid)` via the same service-role client, before returning `{ ok: true, tempPassword }`.
+- Add `admin-deactivate-user` + `admin-reactivate-user` to `deploy:fn` in `package.json`.
+
+### 3c. `_app.admin.tsx` UI
+- `UserRow` gets `disabled: boolean` and (not needed in the table, only relevant on `/account`) — just `disabled` here.
+- Row actions become three buttons depending on state:
+  - Active (`!disabled`) → "Deactivate" (confirm dialog, reworded: "won't be able to log in until reactivated") + no delete button shown.
+  - Deactivated (`disabled`) → "Reactivate" (**confirm dialog**: "This will restore {name}'s access — they'll be able to log in again.") **and** "Delete" (confirm dialog, reworded to make the hard-delete permanence explicit: "This will permanently and irreversibly delete {name}'s account. This cannot be undone.").
+- All four destructive/state-changing actions (deactivate, reactivate, delete, **reset password**) go through a confirm dialog — reuse the existing `AlertDialog` with per-action title/description/confirm-label, rather than firing any of them directly on click. Reset password's dialog: "This will set a new temporary password for {name} and require them to change it on next login. Continue?" — the existing "click Reset password → temp password shown in a Dialog" behavior now happens only after this confirm step.
+- Show a "Deactivated" badge/muted text next to the name when `disabled` is true, and visually de-emphasize the whole row (e.g. `opacity-60` on the `TableRow`) so deactivated users read as out-of-focus at a glance.
+- Disable "Deactivate" for the caller's own row, same as today's delete guard.
+- Add a "Show deactivated users" toggle above the table (simple `Checkbox`/`Switch`, default **off**) — when off, filter `users` to `!disabled` before rendering; when on, show everyone. Keeps the default view focused on active users while still making offboarded accounts reachable for reactivate/delete.
+
+### 3d. `_app.tsx` / `_app.account.tsx` — forced password change
+- In the `_app` route guard (or a lightweight check rendered inside `Gate`), if `profile.must_change_password` is true and the current path isn't `/account`, redirect to `/account`.
+- `_app.account.tsx`'s change-password submit handler: after a successful `updateUser({ password })`, also clear `profiles.must_change_password` for the current user and `refresh()`.
+- Optional UX nicety: show a one-line banner on `/account` when arriving because of a forced reset ("Your password was reset by an admin — please set a new one.").
+
+**Verification for Phase 3:**
+- Run the migration, regenerate `types.ts`.
+- Deploy `admin-deactivate-user`, `admin-reactivate-user`, and the modified `admin-delete-user`/`admin-reset-password`; update `deploy:fn`.
+- As MC: deactivate a throwaway test user → confirm "Deactivated" badge shows, user can't log in → try Delete on an **active** user directly (should be blocked/hidden) → reactivate → confirm login works again → deactivate again → Delete → confirm the row is fully gone and the user can never log in again (hard delete, no recovery).
+- Reset a test user's password → confirm `must_change_password` gets set → log in as that user with the temp password → confirm they're redirected straight to `/account` regardless of what route they try → change password → confirm the redirect stops happening on subsequent logins.
+- Confirm an admin cannot deactivate their own account, and that self-service profile updates still can't set `disabled`/`must_change_password` directly (e.g. via a raw REST call).
+
+**⏸ STOP — review Phase 3 in the browser (deactivate → login-blocked check → delete-only-when-deactivated check → forced-password-change redirect check) before considering this plan fully wrapped up.**
+
+---
+
 ## Final verification (after all phases approved)
 1. `npm run lint` and `npm run build` to confirm routes compile into `routeTree.gen.ts` correctly (auto-generated, don't hand-edit) and the static SPA build still succeeds.
 2. Re-walk both flows (self change-password + name edit, admin edit/reset-password/delete) end-to-end once more after the full set of changes is in place, to catch any interaction effects (e.g. AppShell nav layout, admin table column widths).
 
 ## Deferred (not in this plan)
 - Email-based forgot-password self-service flow — blocked on setting up custom SMTP (Resend/SES/Postmark/SendGrid/Brevo/ZeptoMail) in the Supabase Dashboard. Revisit once that's configured; at that point `resetPasswordForEmail` + a `/reset-password` landing page (already built once, see git history) can be reintroduced with minimal changes.
-- Forced "must change password on next login" flow after an admin password reset — would need a new `profiles.must_change_password` column + route-guard redirect (no Supabase-native support for this). See revision note above for the exact design if this gets picked back up.
+- ~~Forced "must change password on next login" flow~~ **un-deferred in Phase 3** (see above) — now built alongside the deactivate/reactivate migration.
 - Admin editing user email — deferred, would need a second privileged Auth Admin API surface.

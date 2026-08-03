@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +43,16 @@ import { fetchEntities, type Entity } from "@/lib/finance";
 import { useAuth, type AppRole } from "@/lib/auth";
 import { useSheetSync, type SyncMode } from "@/hooks/useSheetSync";
 import { useAuditSync } from "@/hooks/useAuditSync";
-import { AlertCircle, CheckCircle, Clock, KeyRound, Trash2, Copy } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  KeyRound,
+  Trash2,
+  Copy,
+  UserX,
+  UserCheck,
+} from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 
@@ -65,7 +76,14 @@ interface UserRow {
   email: string | null;
   entity_id: string | null;
   role: AppRole | null;
+  disabled: boolean;
 }
+
+type PendingAction =
+  | { type: "deactivate"; user: UserRow }
+  | { type: "reactivate"; user: UserRow }
+  | { type: "delete"; user: UserRow }
+  | { type: "reset"; user: UserRow };
 
 function AdminPage() {
   const { user } = useAuth();
@@ -80,9 +98,9 @@ function AdminPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [editingName, setEditingName] = useState<{ uid: string; value: string } | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [resettingUid, setResettingUid] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [showDeactivated, setShowDeactivated] = useState(false);
   const [tempPasswordFor, setTempPasswordFor] = useState<{
     name: string;
     password: string;
@@ -92,7 +110,7 @@ function AdminPage() {
     setPageLoading(true);
     const [e, p, r] = await Promise.all([
       fetchEntities(),
-      supabase.from("profiles").select("user_id,full_name,email,entity_id"),
+      supabase.from("profiles").select("user_id,full_name,email,entity_id,disabled"),
       supabase.from("user_roles").select("user_id,role"),
     ]);
     setEntities(e);
@@ -101,6 +119,7 @@ function AdminPage() {
       full_name: string | null;
       email: string | null;
       entity_id: string | null;
+      disabled: boolean;
     }[];
     const rolesByUser = new Map<string, AppRole>();
     ((r.data ?? []) as { user_id: string; role: AppRole }[]).forEach((x) =>
@@ -170,35 +189,86 @@ function AdminPage() {
     return data;
   };
 
-  const resetPassword = async (u: UserRow) => {
-    setResettingUid(u.user_id);
+  const runPendingAction = async () => {
+    if (!pendingAction) return;
+    const { type, user: u } = pendingAction;
+    setActionLoading(true);
     try {
-      const data = await callAdminFn("admin-reset-password", { user_id: u.user_id });
-      setTempPasswordFor({
-        name: u.full_name ?? u.email ?? "user",
-        password: data.tempPassword as string,
-      });
+      switch (type) {
+        case "deactivate":
+          await callAdminFn("admin-deactivate-user", { user_id: u.user_id });
+          toast.success("User deactivated");
+          setPendingAction(null);
+          load();
+          break;
+        case "reactivate":
+          await callAdminFn("admin-reactivate-user", { user_id: u.user_id });
+          toast.success("User reactivated");
+          setPendingAction(null);
+          load();
+          break;
+        case "delete":
+          await callAdminFn("admin-delete-user", { user_id: u.user_id });
+          toast.success("User deleted");
+          setPendingAction(null);
+          load();
+          break;
+        case "reset": {
+          const data = await callAdminFn("admin-reset-password", { user_id: u.user_id });
+          setPendingAction(null);
+          setTempPasswordFor({
+            name: u.full_name ?? u.email ?? "user",
+            password: data.tempPassword as string,
+          });
+          break;
+        }
+      }
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Could not reset password");
+      toast.error(e instanceof Error ? e.message : "Action failed");
     } finally {
-      setResettingUid(null);
+      setActionLoading(false);
     }
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await callAdminFn("admin-delete-user", { user_id: deleteTarget.user_id });
-      toast.success("User deleted");
-      setDeleteTarget(null);
-      load();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Could not delete user");
-    } finally {
-      setDeleting(false);
+  const ACTION_COPY: Record<
+    PendingAction["type"],
+    {
+      title: string;
+      description: (name: string) => string;
+      confirmLabel: string;
+      destructive: boolean;
     }
+  > = {
+    deactivate: {
+      title: "Deactivate user?",
+      description: (name) => `${name} won't be able to log in until reactivated.`,
+      confirmLabel: "Deactivate",
+      destructive: true,
+    },
+    reactivate: {
+      title: "Reactivate user?",
+      description: (name) =>
+        `This will restore ${name}'s access — they'll be able to log in again.`,
+      confirmLabel: "Reactivate",
+      destructive: false,
+    },
+    delete: {
+      title: "Delete user?",
+      description: (name) =>
+        `This will permanently and irreversibly delete ${name}'s account. This cannot be undone.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    },
+    reset: {
+      title: "Reset password?",
+      description: (name) =>
+        `This will set a new temporary password for ${name} and require them to change it on next login. Continue?`,
+      confirmLabel: "Reset password",
+      destructive: false,
+    },
   };
+
+  const visibleUsers = showDeactivated ? users : users.filter((u) => !u.disabled);
 
   return (
     <div className="space-y-6">
@@ -210,8 +280,18 @@ function AdminPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">All users ({users.length})</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <CardTitle className="text-base">All users ({visibleUsers.length})</CardTitle>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="show-deactivated"
+              checked={showDeactivated}
+              onCheckedChange={setShowDeactivated}
+            />
+            <Label htmlFor="show-deactivated" className="text-sm font-normal">
+              Show deactivated users
+            </Label>
+          </div>
         </CardHeader>
         <CardContent>
           {pageLoading ? (
@@ -228,8 +308,8 @@ function AdminPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((u) => (
-                  <TableRow key={u.user_id}>
+                {visibleUsers.map((u) => (
+                  <TableRow key={u.user_id} className={u.disabled ? "opacity-60" : undefined}>
                     <TableCell>
                       {editingName?.uid === u.user_id ? (
                         <div className="flex items-center gap-1">
@@ -270,6 +350,11 @@ function AdminPage() {
                       )}
                       {u.user_id === user?.id && (
                         <span className="ml-1 text-xs text-muted-foreground">(you)</span>
+                      )}
+                      {u.disabled && (
+                        <span className="ml-1 text-xs font-medium text-muted-foreground">
+                          (Deactivated)
+                        </span>
                       )}
                     </TableCell>
                     <TableCell>{u.email}</TableCell>
@@ -312,22 +397,44 @@ function AdminPage() {
                           size="sm"
                           variant="outline"
                           className="h-8"
-                          onClick={() => resetPassword(u)}
-                          disabled={resettingUid === u.user_id}
+                          onClick={() => setPendingAction({ type: "reset", user: u })}
                         >
                           <KeyRound className="mr-1 h-3 w-3" />
-                          {resettingUid === u.user_id ? "Resetting…" : "Reset password"}
+                          Reset password
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteTarget(u)}
-                          disabled={u.user_id === user?.id}
-                        >
-                          <Trash2 className="mr-1 h-3 w-3" />
-                          Delete
-                        </Button>
+                        {u.disabled ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8"
+                              onClick={() => setPendingAction({ type: "reactivate", user: u })}
+                            >
+                              <UserCheck className="mr-1 h-3 w-3" />
+                              Reactivate
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-destructive hover:text-destructive"
+                              onClick={() => setPendingAction({ type: "delete", user: u })}
+                            >
+                              <Trash2 className="mr-1 h-3 w-3" />
+                              Delete
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-destructive hover:text-destructive"
+                            onClick={() => setPendingAction({ type: "deactivate", user: u })}
+                            disabled={u.user_id === user?.id}
+                          >
+                            <UserX className="mr-1 h-3 w-3" />
+                            Deactivate
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -338,29 +445,37 @@ function AdminPage() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialog open={!!pendingAction} onOpenChange={(open) => !open && setPendingAction(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete user?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove{" "}
-              <strong>{deleteTarget?.full_name ?? deleteTarget?.email}</strong>&apos;s access. This
-              cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                confirmDelete();
-              }}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {pendingAction && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{ACTION_COPY[pendingAction.type].title}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {ACTION_COPY[pendingAction.type].description(
+                    pendingAction.user.full_name ?? pendingAction.user.email ?? "this user",
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    runPendingAction();
+                  }}
+                  disabled={actionLoading}
+                  className={
+                    ACTION_COPY[pendingAction.type].destructive
+                      ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      : undefined
+                  }
+                >
+                  {actionLoading ? "Working…" : ACTION_COPY[pendingAction.type].confirmLabel}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
 

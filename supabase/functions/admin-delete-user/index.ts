@@ -1,7 +1,9 @@
 // ── Supabase Edge Function: admin-delete-user ────────────────────────────────
-// Lets an mc_user soft-delete another user's auth account. profiles.user_id
-// and user_roles.user_id are ON DELETE CASCADE to auth.users(id), so no
-// orphan rows need manual cleanup.
+// Lets an mc_user permanently (hard) delete another user's auth account, but
+// only once that user has already been deactivated (see admin-deactivate-user)
+// — a deliberate two-step "deactivate, then delete" flow rather than a
+// one-click irreversible action. profiles.user_id and user_roles.user_id are
+// ON DELETE CASCADE to auth.users(id), so no orphan rows need manual cleanup.
 //
 // Deploy: npx supabase functions deploy admin-delete-user
 //
@@ -9,8 +11,9 @@
 //   1. Verify caller has a valid Supabase JWT
 //   2. Confirm caller has mc_user role
 //   3. Read { user_id }; guard against self-deletion
-//   4. Service-role client: auth.admin.deleteUser(user_id, true)
-//   5. Return { ok: true }
+//   4. Guard: target must already have profiles.disabled = true
+//   5. Service-role client: auth.admin.deleteUser(user_id) — hard delete
+//   6. Return { ok: true }
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -82,13 +85,36 @@ Deno.serve(async (req) => {
     });
   }
 
-  // ── 4. Service-role client: soft-delete the user ──────────────────────────
+  // ── 4. Service-role client: require the target already be deactivated ────
   const adminClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const { error: deleteError } = await adminClient.auth.admin.deleteUser(targetUserId, true);
+  const { data: targetProfile, error: profileLookupError } = await adminClient
+    .from("profiles")
+    .select("disabled")
+    .eq("user_id", targetUserId)
+    .maybeSingle();
+
+  if (profileLookupError) {
+    return new Response(JSON.stringify({ ok: false, error: profileLookupError.message }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  if (!targetProfile?.disabled) {
+    return new Response(
+      JSON.stringify({ ok: false, error: "Deactivate this user before deleting" }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  // ── 5. Hard delete ─────────────────────────────────────────────────────
+  const { error: deleteError } = await adminClient.auth.admin.deleteUser(targetUserId);
 
   if (deleteError) {
     return new Response(JSON.stringify({ ok: false, error: deleteError.message }), {

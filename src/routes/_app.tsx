@@ -32,7 +32,7 @@ function AppLayout() {
 }
 
 function Gate() {
-  const { loading, user, roles, signOut } = useAuth();
+  const { loading, user, profile, roles, signOut } = useAuth();
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -41,6 +41,17 @@ function Gate() {
       navigate({ to: "/login", search: { redirect: window.location.pathname } as never });
     }
   }, [loading, user, navigate]);
+
+  useEffect(() => {
+    if (
+      !loading &&
+      user &&
+      profile?.must_change_password &&
+      window.location.pathname !== "/account"
+    ) {
+      navigate({ to: "/account" });
+    }
+  }, [loading, user, profile?.must_change_password, navigate]);
 
   if (loading) {
     return (

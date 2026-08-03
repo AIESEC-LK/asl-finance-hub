@@ -1,20 +1,18 @@
-// ── Supabase Edge Function: admin-reset-password ────────────────────────────
-// Lets an mc_user reset another user's password to a random temp value,
-// with no email involved (free-tier auth email quota is 2/hour, unusable
-// for this). The admin relays the returned temp password to the user
-// out-of-band (Slack/WhatsApp/in person); the user changes it themselves
-// via /account after logging in.
+// ── Supabase Edge Function: admin-deactivate-user ────────────────────────────
+// Lets an mc_user block another user's sign-in without deleting their account.
+// Uses Supabase Auth's native ban mechanism (enforced server-side by Auth
+// itself, not just hidden in the UI) and mirrors the state into
+// profiles.disabled so the /admin table can render it without a separate
+// "list users" call.
 //
-// Deploy: npx supabase functions deploy admin-reset-password
+// Deploy: npx supabase functions deploy admin-deactivate-user
 //
 // Flow:
 //   1. Verify caller has a valid Supabase JWT
 //   2. Confirm caller has mc_user role
-//   3. Generate a random temp password
-//   4. Service-role client: auth.admin.updateUserById(user_id, { password }),
-//      then set profiles.must_change_password = true so the user is routed
-//      to /account on next login until they set their own password
-//   5. Return { ok: true, tempPassword }
+//   3. Read { user_id }; guard against self-deactivation
+//   4. Service-role client: ban the user, then set profiles.disabled = true
+//   5. Return { ok: true }
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -24,13 +22,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-
-function generateTempPassword(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  const bytes = new Uint8Array(12);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -77,7 +68,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  // ── 3. Read target user_id ────────────────────────────────────────────────
+  // ── 3. Read target user_id; guard against self-deactivation ──────────────
   const body = await req.json();
   const targetUserId = body.user_id as string | undefined;
   if (!targetUserId) {
@@ -86,20 +77,27 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+  if (targetUserId === user.id) {
+    return new Response(
+      JSON.stringify({ ok: false, error: "Cannot deactivate your own account" }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
 
-  // ── 4. Service-role client: reset the password ────────────────────────────
+  // ── 4. Service-role client: ban + mirror into profiles.disabled ──────────
   const adminClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const tempPassword = generateTempPassword();
-  const { error: updateError } = await adminClient.auth.admin.updateUserById(targetUserId, {
-    password: tempPassword,
+  const { error: banError } = await adminClient.auth.admin.updateUserById(targetUserId, {
+    ban_duration: "876000h",
   });
-
-  if (updateError) {
-    return new Response(JSON.stringify({ ok: false, error: updateError.message }), {
+  if (banError) {
+    return new Response(JSON.stringify({ ok: false, error: banError.message }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -107,7 +105,7 @@ Deno.serve(async (req) => {
 
   const { error: profileError } = await adminClient
     .from("profiles")
-    .update({ must_change_password: true })
+    .update({ disabled: true })
     .eq("user_id", targetUserId);
   if (profileError) {
     return new Response(JSON.stringify({ ok: false, error: profileError.message }), {
@@ -116,8 +114,8 @@ Deno.serve(async (req) => {
     });
   }
 
-  // ── 5. Return the temp password (shown once, admin relays it manually) ───
-  return new Response(JSON.stringify({ ok: true, tempPassword }), {
+  // ── 5. Done ────────────────────────────────────────────────────────────
+  return new Response(JSON.stringify({ ok: true }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });

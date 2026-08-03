@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_app/account")({
 });
 
 function ChangePasswordCard() {
-  const { user } = useAuth();
+  const { user, profile, refresh } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -43,6 +43,13 @@ function ChangePasswordCard() {
       }
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
+      if (profile?.must_change_password) {
+        await supabase
+          .from("profiles")
+          .update({ must_change_password: false })
+          .eq("user_id", user.id);
+        await refresh();
+      }
       toast.success("Password updated");
       setCurrentPassword("");
       setNewPassword("");
@@ -160,12 +167,18 @@ function EditNameCard() {
 }
 
 function AccountPage() {
+  const { profile } = useAuth();
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold">Account</h2>
         <p className="text-sm text-muted-foreground">Manage your profile and password.</p>
       </div>
+      {profile?.must_change_password && (
+        <div className="rounded-md border border-yellow-500/50 bg-yellow-500/10 px-3 py-2 text-sm">
+          Your password was reset by an admin — please set a new one below.
+        </div>
+      )}
       <EditNameCard />
       <ChangePasswordCard />
     </div>
