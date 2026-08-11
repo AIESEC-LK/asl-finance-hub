@@ -17,6 +17,7 @@ import { Route as AppLcRouteImport } from './routes/_app.lc'
 import { Route as AppContactsRouteImport } from './routes/_app.contacts'
 import { Route as AppAuditRouteImport } from './routes/_app.audit'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
+import { Route as AppAccountRouteImport } from './routes/_app.account'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -57,10 +58,16 @@ const AppAdminRoute = AppAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAccountRoute = AppAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/account': typeof AppAccountRoute
   '/admin': typeof AppAdminRoute
   '/audit': typeof AppAuditRoute
   '/contacts': typeof AppContactsRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/account': typeof AppAccountRoute
   '/admin': typeof AppAdminRoute
   '/audit': typeof AppAuditRoute
   '/contacts': typeof AppContactsRoute
@@ -81,6 +89,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/account': typeof AppAccountRoute
   '/_app/admin': typeof AppAdminRoute
   '/_app/audit': typeof AppAuditRoute
   '/_app/contacts': typeof AppContactsRoute
@@ -92,18 +101,28 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/account'
     | '/admin'
     | '/audit'
     | '/contacts'
     | '/lc'
     | '/overview'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/admin' | '/audit' | '/contacts' | '/lc' | '/overview'
+  to:
+    | '/'
+    | '/login'
+    | '/account'
+    | '/admin'
+    | '/audit'
+    | '/contacts'
+    | '/lc'
+    | '/overview'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/login'
+    | '/_app/account'
     | '/_app/admin'
     | '/_app/audit'
     | '/_app/contacts'
@@ -175,10 +194,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/account': {
+      id: '/_app/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AppAccountRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppAccountRoute: typeof AppAccountRoute
   AppAdminRoute: typeof AppAdminRoute
   AppAuditRoute: typeof AppAuditRoute
   AppContactsRoute: typeof AppContactsRoute
@@ -187,6 +214,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAccountRoute: AppAccountRoute,
   AppAdminRoute: AppAdminRoute,
   AppAuditRoute: AppAuditRoute,
   AppContactsRoute: AppContactsRoute,

@@ -126,6 +126,11 @@ function LoginPage() {
                 minLength={6}
               />
             </div>
+            {mode === "signin" && (
+              <p className="text-right text-sm text-muted-foreground">
+                Forgot your password? Contact your MC/EFB admin to reset it.
+              </p>
+            )}
             {err && (
               <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {err}

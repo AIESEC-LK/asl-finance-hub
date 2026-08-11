@@ -18,11 +18,41 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { fetchEntities, type Entity } from "@/lib/finance";
 import { useAuth, type AppRole } from "@/lib/auth";
 import { useSheetSync, type SyncMode } from "@/hooks/useSheetSync";
 import { useAuditSync } from "@/hooks/useAuditSync";
-import { AlertCircle, CheckCircle, Clock } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  KeyRound,
+  Trash2,
+  Copy,
+  UserX,
+  UserCheck,
+} from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 
@@ -46,7 +76,14 @@ interface UserRow {
   email: string | null;
   entity_id: string | null;
   role: AppRole | null;
+  disabled: boolean;
 }
+
+type PendingAction =
+  | { type: "deactivate"; user: UserRow }
+  | { type: "reactivate"; user: UserRow }
+  | { type: "delete"; user: UserRow }
+  | { type: "reset"; user: UserRow };
 
 function AdminPage() {
   const { user } = useAuth();
@@ -60,12 +97,20 @@ function AdminPage() {
   const [entities, setEntities] = useState<Entity[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
+  const [editingName, setEditingName] = useState<{ uid: string; value: string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [showDeactivated, setShowDeactivated] = useState(false);
+  const [tempPasswordFor, setTempPasswordFor] = useState<{
+    name: string;
+    password: string;
+  } | null>(null);
 
   const load = async () => {
     setPageLoading(true);
     const [e, p, r] = await Promise.all([
       fetchEntities(),
-      supabase.from("profiles").select("user_id,full_name,email,entity_id"),
+      supabase.from("profiles").select("user_id,full_name,email,entity_id,disabled"),
       supabase.from("user_roles").select("user_id,role"),
     ]);
     setEntities(e);
@@ -74,6 +119,7 @@ function AdminPage() {
       full_name: string | null;
       email: string | null;
       entity_id: string | null;
+      disabled: boolean;
     }[];
     const rolesByUser = new Map<string, AppRole>();
     ((r.data ?? []) as { user_id: string; role: AppRole }[]).forEach((x) =>
@@ -115,6 +161,115 @@ function AdminPage() {
     }
   };
 
+  const saveName = async (uid: string, full_name: string) => {
+    const { error } = await supabase.from("profiles").update({ full_name }).eq("user_id", uid);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Name updated");
+      setEditingName(null);
+      load();
+    }
+  };
+
+  const callAdminFn = async (fnName: string, payload: Record<string, unknown>) => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) throw new Error("Not authenticated");
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fnName}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json()) as { ok: boolean; error?: string; [k: string]: unknown };
+    if (!data.ok) throw new Error(data.error ?? "Request failed");
+    return data;
+  };
+
+  const runPendingAction = async () => {
+    if (!pendingAction) return;
+    const { type, user: u } = pendingAction;
+    setActionLoading(true);
+    try {
+      switch (type) {
+        case "deactivate":
+          await callAdminFn("admin-deactivate-user", { user_id: u.user_id });
+          toast.success("User deactivated");
+          setPendingAction(null);
+          load();
+          break;
+        case "reactivate":
+          await callAdminFn("admin-reactivate-user", { user_id: u.user_id });
+          toast.success("User reactivated");
+          setPendingAction(null);
+          load();
+          break;
+        case "delete":
+          await callAdminFn("admin-delete-user", { user_id: u.user_id });
+          toast.success("User deleted");
+          setPendingAction(null);
+          load();
+          break;
+        case "reset": {
+          const data = await callAdminFn("admin-reset-password", { user_id: u.user_id });
+          setPendingAction(null);
+          setTempPasswordFor({
+            name: u.full_name ?? u.email ?? "user",
+            password: data.tempPassword as string,
+          });
+          break;
+        }
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Action failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const ACTION_COPY: Record<
+    PendingAction["type"],
+    {
+      title: string;
+      description: (name: string) => string;
+      confirmLabel: string;
+      destructive: boolean;
+    }
+  > = {
+    deactivate: {
+      title: "Deactivate user?",
+      description: (name) => `${name} won't be able to log in until reactivated.`,
+      confirmLabel: "Deactivate",
+      destructive: true,
+    },
+    reactivate: {
+      title: "Reactivate user?",
+      description: (name) =>
+        `This will restore ${name}'s access — they'll be able to log in again.`,
+      confirmLabel: "Reactivate",
+      destructive: false,
+    },
+    delete: {
+      title: "Delete user?",
+      description: (name) =>
+        `This will permanently and irreversibly delete ${name}'s account. This cannot be undone.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    },
+    reset: {
+      title: "Reset password?",
+      description: (name) =>
+        `This will set a new temporary password for ${name} and require them to change it on next login. Continue?`,
+      confirmLabel: "Reset password",
+      destructive: false,
+    },
+  };
+
+  const visibleUsers = showDeactivated ? users : users.filter((u) => !u.disabled);
+
   return (
     <div className="space-y-6">
       <div>
@@ -125,8 +280,18 @@ function AdminPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">All users ({users.length})</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <CardTitle className="text-base">All users ({visibleUsers.length})</CardTitle>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="show-deactivated"
+              checked={showDeactivated}
+              onCheckedChange={setShowDeactivated}
+            />
+            <Label htmlFor="show-deactivated" className="text-sm font-normal">
+              Show deactivated users
+            </Label>
+          </div>
         </CardHeader>
         <CardContent>
           {pageLoading ? (
@@ -143,12 +308,53 @@ function AdminPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((u) => (
-                  <TableRow key={u.user_id}>
+                {visibleUsers.map((u) => (
+                  <TableRow key={u.user_id} className={u.disabled ? "opacity-60" : undefined}>
                     <TableCell>
-                      {u.full_name ?? "—"}
+                      {editingName?.uid === u.user_id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            className="h-8 w-36"
+                            value={editingName.value}
+                            onChange={(e) =>
+                              setEditingName({ uid: u.user_id, value: e.target.value })
+                            }
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            className="h-8"
+                            onClick={() => saveName(u.user_id, editingName.value)}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8"
+                            onClick={() => setEditingName(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-left hover:underline"
+                          onClick={() =>
+                            setEditingName({ uid: u.user_id, value: u.full_name ?? "" })
+                          }
+                        >
+                          {u.full_name ?? "—"}
+                        </button>
+                      )}
                       {u.user_id === user?.id && (
                         <span className="ml-1 text-xs text-muted-foreground">(you)</span>
+                      )}
+                      {u.disabled && (
+                        <span className="ml-1 text-xs font-medium text-muted-foreground">
+                          (Deactivated)
+                        </span>
                       )}
                     </TableCell>
                     <TableCell>{u.email}</TableCell>
@@ -185,7 +391,54 @@ function AdminPage() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        {u.user_id !== user?.id && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8"
+                            onClick={() => setPendingAction({ type: "reset", user: u })}
+                          >
+                            <KeyRound className="mr-1 h-3 w-3" />
+                            Reset password
+                          </Button>
+                        )}
+                        {u.disabled ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8"
+                              onClick={() => setPendingAction({ type: "reactivate", user: u })}
+                            >
+                              <UserCheck className="mr-1 h-3 w-3" />
+                              Reactivate
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-destructive hover:text-destructive"
+                              onClick={() => setPendingAction({ type: "delete", user: u })}
+                            >
+                              <Trash2 className="mr-1 h-3 w-3" />
+                              Delete
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-destructive hover:text-destructive"
+                            onClick={() => setPendingAction({ type: "deactivate", user: u })}
+                            disabled={u.user_id === user?.id}
+                          >
+                            <UserX className="mr-1 h-3 w-3" />
+                            Deactivate
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -193,6 +446,70 @@ function AdminPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!pendingAction} onOpenChange={(open) => !open && setPendingAction(null)}>
+        <AlertDialogContent>
+          {pendingAction && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{ACTION_COPY[pendingAction.type].title}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {ACTION_COPY[pendingAction.type].description(
+                    pendingAction.user.full_name ?? pendingAction.user.email ?? "this user",
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    runPendingAction();
+                  }}
+                  disabled={actionLoading}
+                  className={
+                    ACTION_COPY[pendingAction.type].destructive
+                      ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      : undefined
+                  }
+                >
+                  {actionLoading ? "Working…" : ACTION_COPY[pendingAction.type].confirmLabel}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!tempPasswordFor} onOpenChange={(open) => !open && setTempPasswordFor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Temporary password for {tempPasswordFor?.name}</DialogTitle>
+            <DialogDescription>
+              Shown once — relay this to the user directly (Slack/WhatsApp/in person). They should
+              log in with it and change it via their Account page.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 rounded-md border bg-muted px-3 py-2 font-mono text-sm">
+            <span className="flex-1 select-all">{tempPasswordFor?.password}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                if (tempPasswordFor) {
+                  navigator.clipboard.writeText(tempPasswordFor.password);
+                  toast.success("Copied to clipboard");
+                }
+              }}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setTempPasswordFor(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>

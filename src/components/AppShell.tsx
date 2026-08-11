@@ -11,6 +11,7 @@ import {
   Users,
   LogOut,
   Wallet,
+  UserCog,
 } from "lucide-react";
 
 const NAV = [
@@ -86,6 +87,17 @@ export function AppShell() {
             <div className="truncate font-medium">{profile?.full_name || user?.email}</div>
             <div className="text-muted-foreground">{roles.join(", ") || "no role"}</div>
           </div>
+          <Link
+            to="/account"
+            className="mb-2 flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            activeProps={{
+              className:
+                "mb-2 flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium bg-primary/10 text-primary",
+            }}
+          >
+            <UserCog className="h-4 w-4" />
+            Account
+          </Link>
           <Button variant="outline" size="sm" className="w-full" onClick={handleSignOut}>
             <LogOut className="mr-2 h-3 w-3" /> Sign out
           </Button>
